@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore src/BatteryDock/BatteryDock.csproj
+
+      - name: Build
+        run: dotnet build src/BatteryDock/BatteryDock.csproj -c Release --no-restore
+
+      - name: Publish self-contained executable
+        run: >
+          dotnet publish src/BatteryDock/BatteryDock.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o artifacts
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BatteryDock-win-x64
+          path: artifacts/BatteryDock.exe
+          if-no-files-found: error

@@ -1,0 +1,57 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish self-contained executable
+        run: >
+          dotnet publish src/BatteryDock/BatteryDock.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o artifacts
+
+      - name: Package release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $zip = "release/BatteryDock-${{ github.ref_name }}-win-x64.zip"
+          $files = @(
+            "artifacts/BatteryDock.exe",
+            "README.md",
+            "使用说明.txt",
+            "LICENSE",
+            "THIRD-PARTY-NOTICES.md"
+          )
+          Compress-Archive -Path $files -DestinationPath $zip -Force
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sumFile = "$zip.sha256"
+          "$hash  $([IO.Path]::GetFileName($zip))" | Set-Content -LiteralPath $sumFile -Encoding utf8
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.zip
+            release/*.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true

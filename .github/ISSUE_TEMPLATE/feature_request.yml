@@ -1,0 +1,45 @@
+name: Feature request / 功能建议
+description: Suggest a new device protocol, UI improvement, or integration.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the current behavior and why it is inconvenient.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device / protocol (if applicable)
+      placeholder: Model, VID:PID, receiver model
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Public protocol references
+      description: Links to public documentation or reverse-engineering notes. Do not paste proprietary source code.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: This request is for a local feature and does not require cloud services.
+          required: false
+        - label: I can test with the target hardware and provide logs.
+          required: false

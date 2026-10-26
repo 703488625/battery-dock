@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/YOUR_GITHUB_USERNAME/battery-dock#readme
+    about: Read the quick start, supported devices, and troubleshooting first.
+  - name: Security policy
+    url: https://github.com/YOUR_GITHUB_USERNAME/battery-dock/security/policy
+    about: Please report vulnerabilities privately, not in a public issue.

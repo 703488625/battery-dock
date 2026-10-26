@@ -1,0 +1,42 @@
+# Build output
+bin/
+obj/
+dist/
+release/
+artifacts/
+
+# Local SDK / package caches
+.dotnet/
+.dotnet-home/
+.nuget/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test / diagnostic output
+TestResults/
+*.log
+*.trx
+*.coverage
+*.dmp
+*.etl
+
+# Local screenshots and scratch files
+*.tmp
+tmp_*/
+click_*.png
+glass_*.png
+demo*.png
+final_*.png
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Local shortcut
+电量坞.lnk
