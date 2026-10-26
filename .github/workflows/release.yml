@@ -40,7 +40,8 @@ jobs:
             "README.md",
             "使用说明.txt",
             "LICENSE",
-            "THIRD-PARTY-NOTICES.md"
+            "THIRD-PARTY-NOTICES.md",
+            "CHANGELOG.md"
           )
           Compress-Archive -Path $files -DestinationPath $zip -Force
           $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
