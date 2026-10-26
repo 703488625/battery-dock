@@ -27,7 +27,8 @@ $files = @(
     (Join-Path $root "README.md"),
     (Join-Path $root "使用说明.txt"),
     (Join-Path $root "LICENSE"),
-    (Join-Path $root "THIRD-PARTY-NOTICES.md")
+    (Join-Path $root "THIRD-PARTY-NOTICES.md"),
+    (Join-Path $root "CHANGELOG.md")
 )
 
 Compress-Archive -Path $files -DestinationPath $zip -Force

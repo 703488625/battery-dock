@@ -57,6 +57,7 @@ release\BatteryDock-1.0.0-win-x64.zip.sha256
 - `使用说明.txt`
 - `LICENSE`
 - `THIRD-PARTY-NOTICES.md`
+- `CHANGELOG.md`
 
 ## 通过 GitHub Actions 发布
 
