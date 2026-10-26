@@ -68,7 +68,7 @@ git push origin v1.0.0
 工作流会：
 
 1. 发布自包含单文件
-2. 打包 `BatteryDock-1.0.0-win-x64.zip`
+2. 打包 `BatteryDock-v1.0.0-win-x64.zip`
 3. 生成 SHA-256
 4. 创建 Release 并上传资产
 
@@ -81,8 +81,8 @@ git push origin v1.0.0
 然后到 GitHub → Releases → Draft a new release，上传：
 
 ```text
-release\BatteryDock-1.0.0-win-x64.zip
-release\BatteryDock-1.0.0-win-x64.zip.sha256
+release\BatteryDock-v1.0.0-win-x64.zip
+release\BatteryDock-v1.0.0-win-x64.zip.sha256
 ```
 
 Release notes 可以直接使用 `CHANGELOG.md` 的 `[1.0.0]` 段落。

@@ -46,8 +46,8 @@ dist\BatteryDock.exe.sha256
 输出：
 
 ```text
-release\BatteryDock-1.0.0-win-x64.zip
-release\BatteryDock-1.0.0-win-x64.zip.sha256
+release\BatteryDock-v1.0.0-win-x64.zip
+release\BatteryDock-v1.0.0-win-x64.zip.sha256
 ```
 
 压缩包包含：
@@ -85,7 +85,7 @@ git push origin v1.0.0
 1. 本地执行 `.\scripts\release.ps1 -Version 1.0.0`
 2. 打开 GitHub → Releases → Draft a new release
 3. Tag 选择 `v1.0.0`（或新建）
-4. 上传 `release\BatteryDock-1.0.0-win-x64.zip` 和 `.sha256`
+4. 上传 `release\BatteryDock-v1.0.0-win-x64.zip` 和 `.sha256`
 5. 粘贴 `CHANGELOG.md` 对应段落
 6. 发布
 
@@ -102,8 +102,8 @@ git push origin v1.0.0
 用户可以用 PowerShell 验证：
 
 ```powershell
-Get-FileHash .\BatteryDock-1.0.0-win-x64.zip -Algorithm SHA256
-Get-Content .\BatteryDock-1.0.0-win-x64.zip.sha256
+Get-FileHash .\BatteryDock-v1.0.0-win-x64.zip -Algorithm SHA256
+Get-Content .\BatteryDock-v1.0.0-win-x64.zip.sha256
 ```
 
 或直接验证 exe：

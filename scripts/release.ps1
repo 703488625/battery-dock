@@ -1,7 +1,7 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version = "v1.0.0",
     [switch]$SkipBuild
 )
 
@@ -17,6 +17,8 @@ $exe = Join-Path $root "dist\BatteryDock.exe"
 if (-not (Test-Path -LiteralPath $exe)) {
     throw "找不到 $exe，请先运行 scripts\build.ps1。"
 }
+
+if (-not $Version.StartsWith("v")) { $Version = "v$Version" }
 
 $releaseDir = Join-Path $root "release"
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
