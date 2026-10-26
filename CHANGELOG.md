@@ -56,4 +56,4 @@ First public release.
   implemented with layered translucency, ambient gradients, and highlights.
 - The executable is unsigned, so Windows SmartScreen may warn on first launch.
 
-[1.0.0]: https://github.com/YOUR_GITHUB_USERNAME/battery-dock/releases/tag/v1.0.0
+[1.0.0]: https://github.com/703488625/battery-dock/releases/tag/v1.0.0

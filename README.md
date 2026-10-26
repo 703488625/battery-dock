@@ -12,13 +12,19 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4" />
   <img alt=".NET" src="https://img.shields.io/badge/.NET-8-512BD4" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue" />
+  <a href="https://github.com/703488625/battery-dock/actions/workflows/ci.yml">
+    <img alt="build" src="https://github.com/703488625/battery-dock/actions/workflows/ci.yml/badge.svg" />
+  </a>
+  <a href="https://github.com/703488625/battery-dock/releases">
+    <img alt="release" src="https://img.shields.io/github/v/release/703488625/battery-dock?include_prereleases&sort=semver" />
+  </a>
 </p>
 
 > A local-only Windows tray app for Bluetooth and 2.4 GHz peripheral battery levels. No vendor software, no network, no telemetry.
 
 点开任务栏隐藏图标就能看电量。界面采用液态玻璃风格：半透明玻璃壳、柔和的环境光场、渐变边缘高光和内外阴影。设置 → 外观 → 主题可以切换“跟随系统 / 浅色 / 深色”，玻璃材质会同步适配。
 
-> **下载**：从 [GitHub Releases](https://github.com/YOUR_GITHUB_USERNAME/battery-dock/releases/latest) 下载 `BatteryDock-1.0.0-win-x64.zip`，解压后运行 `BatteryDock.exe`。  
+> **下载**：从 [GitHub Releases](https://github.com/703488625/battery-dock/releases/latest) 下载 `BatteryDock-1.0.0-win-x64.zip`，解压后运行 `BatteryDock.exe`。  
 > 这是自包含单文件程序，不需要安装 .NET；第一次运行可能遇到 SmartScreen，选择“更多信息 → 仍要运行”。
 
 ![电量坞界面](docs/screenshot.png)

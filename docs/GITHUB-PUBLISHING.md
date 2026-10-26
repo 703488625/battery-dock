@@ -21,16 +21,14 @@ A local-only Windows tray app for Bluetooth and 2.4 GHz peripheral battery level
 windows  wpf  dotnet  tray  battery  bluetooth  hid  logitech  razer  atk  mchose
 ```
 
-## 2. 替换占位符
+## 2. 仓库名与链接
 
-以下文件里的 `YOUR_GITHUB_USERNAME` 和 `battery-dock` 需要换成实际用户名/仓库名：
+当前文档按 `703488625/battery-dock` 配置。如果 fork、改名或迁移账号，需要同步更新：
 
-- `README.md`
-- `CHANGELOG.md`
+- `README.md` 的下载链接和 CI / Release 徽章
+- `CHANGELOG.md` 的 release 链接
 - `.github/ISSUE_TEMPLATE/config.yml`
-- `docs/GITHUB-PUBLISHING.md`（本文档的示例链接）
-
-如果仓库名不是 `battery-dock`，也要同步替换。
+- 本文档里的 remote 示例
 
 ## 3. 初始化并推送
 
@@ -39,7 +37,7 @@ cd E:\电量工具
 git init -b main
 git add .
 git commit -m "Initial public release: BatteryDock 1.0.0"
-git remote add origin https://github.com/YOUR_GITHUB_USERNAME/battery-dock.git
+git remote add origin https://github.com/703488625/battery-dock.git
 git push -u origin main
 ```
 
