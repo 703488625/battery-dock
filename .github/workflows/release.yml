@@ -49,7 +49,7 @@ jobs:
           "$hash  $([IO.Path]::GetFileName($zip))" | Set-Content -LiteralPath $sumFile -Encoding utf8
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             release/*.zip
