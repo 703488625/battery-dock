@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Windows.Data;
 using System.Windows.Input;
 using BatteryDock.Models;
 using BatteryDock.Services;
@@ -36,6 +37,13 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _settingsService = settingsService;
         _isDemo = isDemo;
 
+        DevicesView = CollectionViewSource.GetDefaultView(Devices);
+        if (DevicesView is ListCollectionView listView)
+        {
+            listView.GroupDescriptions.Add(
+                new PropertyGroupDescription(nameof(DeviceItemViewModel.BatteryGroup)));
+        }
+
         Settings = new SettingsViewModel(
             settingsService,
             onThemeChanged: () => ThemeChanged?.Invoke(_settingsService.Settings.Theme),
@@ -69,6 +77,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action? ExitRequested;
 
     public ObservableCollection<DeviceItemViewModel> Devices { get; } = new();
+    public ICollectionView DevicesView { get; }
     public SettingsViewModel Settings { get; }
     public ICommand RefreshCommand { get; }
     public ICommand OpenSettingsCommand { get; }
@@ -280,6 +289,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             .ToArray();
 
         SyncDevices(_visibleReadings);
+        DevicesView.Refresh();
 
         OnPropertyChanged(nameof(HasDevices));
         OnPropertyChanged(nameof(ShowDeviceList));
@@ -352,7 +362,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             merged[reading.Key] = reading;
         }
 
-        return merged.Values.ToArray();
+        return XboxReadingFilter.Dedupe(merged.Values);
     }
 
     private static bool IsDefaultVisible(DeviceReading reading)

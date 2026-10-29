@@ -19,6 +19,11 @@
 | 设备族 | 传输 | 入口 | 状态 |
 |---|---|---|---|
 | BLE Battery Service | BLE GATT | `0x180F` / `0x2A19` | ✅ 通用路径 |
+| Xbox 手柄（蓝牙） | BLE GATT | `0x180F` / `0x2A19` | 🧪 通用路径，未在 Xbox 实机确认 |
+| Xbox 手柄（无线适配器 / USB） | Windows XInput | `XInputGetBatteryInformation` | 🧪 代码已接入，未实机验证 |
+| DualSense（USB） | USB HID input report | byte 52：电量低 4 位、充电高 4 位 | 🧪 代码已接入，未实机验证 |
+| GameSir T4N2（Nova 2 Lite） | 厂商 HID report | 65B 报文，`[19]` 电量 / `[20]` 充电 | 🧪 代码已接入，未实机验证 |
+| BETOP 鲲鹏20 | 厂商 HID report | `02 15`，byte[2] 电量 / byte[4]&0x0F 充电 | 🧪 代码已接入，未实机验证 |
 | Windows 设备电量属性 | Windows PnP | 系统属性 | ✅ 通用路径 |
 | 经典蓝牙 HFP 电量 | 经典蓝牙 | `{104EA319-6EE2-4701-BD47-8DDBF425BBE5}` PID 2 | ⚠️ 依设备 |
 | Razer 2.4G | HID feature report | 90 字节报告 | ✅ DeathAdder V2 X HyperSpeed |
@@ -48,6 +53,114 @@
 - 属性 GUID：`{104EA319-6EE2-4701-BD47-8DDBF425BBE5}`
 - 属性 ID：`2`
 - 主要用于部分耳机/经典蓝牙外设；不是所有设备都提供。
+
+---
+
+## Xbox 手柄
+
+实现：`Services/XInputBatteryService.cs`（适配器 / USB）和
+`Services/BluetoothBatteryService.cs`（蓝牙）。
+
+### 蓝牙连接
+
+- 使用标准 BLE Battery Service：Service `0x180F`，Characteristic `0x2A19`。
+- 读取单字节 0–100；与普通 BLE 键盘、鼠标共用同一条路径。
+- 需要手柄固件暴露该服务。Xbox One S 之后的蓝牙固件通常支持；如果 Windows
+  没有暴露服务，程序会回退到 Windows 设备电量属性或上次电量。
+
+### Xbox 无线适配器 / USB
+
+- API：`xinput1_4.dll`
+  - `XInputGetState(slot)` 判断 0–3 槽位是否有手柄。
+  - `XInputGetBatteryInformation(slot, BATTERY_DEVTYPE_GAMEPAD=0, ...)`
+    读取电池类型和档位。
+- `XINPUT_BATTERY_INFORMATION` 两个字节：
+  - `BatteryType`：`0=Disconnected`（已连接但尚无读数）、`1=Wired`、
+    `2=Alkaline`、`3=Nimh`、`255=Unknown`。
+  - `BatteryLevel`：`0=Empty`、`1=Low`、`2=Medium`、`3=Full`。
+- XInput 只有 4 档，没有精确百分比。本程序按社区常用映射估算：
+
+  | BatteryLevel | 估算百分比 |
+  |---|---|
+  | Empty | 10% |
+  | Low | 40% |
+  | Medium | 70% |
+  | Full | 100% |
+
+- `BatteryType=Wired` 不伪造电量，界面显示“有线”。
+- `BatteryType=Disconnected` 表示手柄已连接但还没上报电量，界面显示
+  “按一下手柄后读取电量”，不触发低电量提醒。
+- 去重：XInput 不能告诉程序某个槽位是否就是蓝牙手柄。程序按
+  `D = max(0, XInput 无线槽位数 - 已连接蓝牙 Xbox 手柄数)` 保留适配器手柄，
+  优先保留有电池读数的槽位；蓝牙读数始终优先于 XInput 的四档估算。
+
+### 验证状态
+
+- 🧪 代码已接入；开发者本机没有 Xbox 手柄，XInput 路径尚未实机验证。
+- 蓝牙 Xbox 手柄复用通用 BLE 路径，也没有单独的 Xbox 实机记录。
+
+### 参考
+
+- **94leon/XboxControllerBatteryMonitor**（MIT）— BLE + XInput 双通道、
+  4 档映射和 `K - N` 去重思路。
+- **NiyaShy/XB1ControllerBatteryIndicator**（GPL-2.0）— XInput 电量类型 /
+  档位语义和多槽位读取。仅使用 API 事实，没有复制源代码。
+
+---
+
+## Sony DualSense（USB）
+
+实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadDualSense`。
+
+- USB HID 输入报告长度至少 53 字节，报告 ID `0x01`。
+- 第 `52` 字节（0-based）：
+  - 低 4 位：电量档位 `0–10`，乘 10 得到百分比。
+  - 高 4 位：充电状态；`1` 或 `2` 表示充电中。
+- 只处理 `VID 0x054C / PID 0x0CE6`（DualSense）和 `0x0DF2`（DualSense Edge），
+  且跳过 `BTHENUM` 接口；蓝牙 DualSense 报告布局不同，暂未接入。
+- 协议事实来自 Linux 内核 `hid-playstation.c` 和 ds-battery-indicator 的说明；
+  后者没有 LICENSE，因此没有复制其代码。
+
+验证状态：🧪 本机没有 DualSense，未实机验证。
+
+---
+
+## GameSir T4N2（Nova 2 Lite）
+
+实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadGameSir`。
+
+- 设备 VID `0x3537`；T4N2 有线 / 2.4G 接收器接口。
+- 查询：写入厂商报告，前 4 字节 `00 01 01 00`，其余补零到输出报告长度。
+- 回应（65 字节布局）：
+  - `[0] = 0x00`，`[1] = 0x01`
+  - `[2..7]`：设备 MAC
+  - `[19]`：电量 0–100
+  - `[20]`：充电状态，非 0 表示充电中
+- 使用 MAC 作为稳定 Key：`gamesir:{MAC}`，换连接方式后仍能沿用上次电量。
+- 蓝牙模式 PID `0x02E0` 不开放电量查询；界面会显示
+  “盖世小鸡蓝牙模式不开放电量查询”。
+
+验证状态：🧪 按 peripheral-battery-widget 的 MIT 协议事实实现，本机无设备。
+
+---
+
+## BETOP 北通（鲲鹏20）
+
+实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadBetop`。
+
+- 接收器 VID `0x20BC`，鲲鹏20 PID `0x5191`。
+- 厂商 HID 接口：`usage_page = 0xFF00`（实现按 64 字节接口尝试）。
+- 查询帧：`report_id = 0x02`，header `0x15`；按 `64 → 32 → 16`
+  依次尝试写入长度，其余补零。
+- 状态回包：
+  - `byte[0] = 0x02`，`byte[1] = 0x15`
+  - `byte[2]`：电量 0–100
+  - `byte[4] & 0x0F`：非 0 表示充电中
+- 使用设备序列号（若有）或 VID/PID + 名称作为稳定 Key。
+- 北通各型号属于同一协议家族，但 report id / 偏移可能不同；当前只验证了
+  鲲鹏20 的公开描述，其他型号需要实机抓包确认。
+
+验证状态：🧪 按 betop-battery 的 MIT 协议事实实现，本机无设备。
 
 ---
 

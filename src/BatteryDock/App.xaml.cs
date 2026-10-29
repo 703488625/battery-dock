@@ -22,7 +22,8 @@ public partial class App : System.Windows.Application
     private TrayPopupWindow? _popup;
     private TrayIconManager? _tray;
     private DispatcherTimer? _refreshTimer;
-    private readonly HashSet<string> _lowNotified = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan LowBatteryRepeatInterval = TimeSpan.FromMinutes(30);
+    private readonly Dictionary<string, DateTimeOffset> _lowNotifiedAt = new(StringComparer.OrdinalIgnoreCase);
 
     private bool _isDemo;
     private bool _isExiting;
@@ -65,9 +66,10 @@ public partial class App : System.Windows.Application
             var bluetoothService = new BluetoothBatteryService(_isDemo, _lastKnown);
             var wirelessHidService = new WirelessHidBatteryService(_isDemo, _lastKnown);
             var logitechService = new LogitechHidppService(_isDemo, _lastKnown);
+            var xinputService = new XInputBatteryService(_isDemo);
             var mouseDpiService = new MouseDpiService(logitechService);
             _batteryService = new PeripheralBatteryService(
-                bluetoothService, wirelessHidService, logitechService);
+                bluetoothService, wirelessHidService, logitechService, xinputService);
             Logger.Info("步骤：创建视图模型");
             _viewModel = new MainViewModel(_batteryService, _settingsService, _isDemo);
             logitechService.DevicesChanged += OnLogitechDevicesChanged;
@@ -254,10 +256,11 @@ public partial class App : System.Windows.Application
         var settings = _settingsService.Settings;
         if (!settings.LowBatteryAlert)
         {
-            _lowNotified.Clear();
+            _lowNotifiedAt.Clear();
             return;
         }
 
+        var now = DateTimeOffset.Now;
         var threshold = settings.LowBatteryThreshold;
         var lowNow = readings
             .Where(reading => reading.IsConnected && reading.IsFreshBattery &&
@@ -265,7 +268,7 @@ public partial class App : System.Windows.Application
                               reading.Battery <= threshold)
             .ToList();
 
-        foreach (var key in _lowNotified.ToArray())
+        foreach (var key in _lowNotifiedAt.Keys.ToArray())
         {
             var current = readings.FirstOrDefault(reading =>
                 string.Equals(reading.Key, key, StringComparison.OrdinalIgnoreCase));
@@ -274,16 +277,20 @@ public partial class App : System.Windows.Application
                 !current.Battery.HasValue ||
                 current.Battery.Value > threshold + 5)
             {
-                _lowNotified.Remove(key);
+                _lowNotifiedAt.Remove(key);
             }
         }
 
+        // Keep reminding every 30 minutes while the device is still below
+        // the threshold, instead of notifying only once per discharge cycle.
         var newlyLow = lowNow
-            .Where(reading => !_lowNotified.Contains(reading.Key))
+            .Where(reading =>
+                !_lowNotifiedAt.TryGetValue(reading.Key, out var lastNotified) ||
+                now - lastNotified >= LowBatteryRepeatInterval)
             .ToList();
 
         if (newlyLow.Count == 0) return;
-        if (settings.IsQuietHours(DateTimeOffset.Now))
+        if (settings.IsQuietHours(now))
         {
             Logger.Info("免打扰时段：跳过低电量通知（" +
                         string.Join("、", newlyLow.Select(reading =>
@@ -293,7 +300,7 @@ public partial class App : System.Windows.Application
 
         foreach (var reading in newlyLow)
         {
-            _lowNotified.Add(reading.Key);
+            _lowNotifiedAt[reading.Key] = now;
         }
 
         var message = newlyLow.Count == 1

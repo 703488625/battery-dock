@@ -4,22 +4,26 @@ using BatteryDock.Models;
 namespace BatteryDock.Services;
 
 /// <summary>
-/// Combines Bluetooth and 2.4 GHz HID battery sources into one device list.
+/// Combines Bluetooth, XInput (Xbox adapter / USB) and 2.4 GHz HID battery
+/// sources into one device list.
 /// </summary>
 internal sealed class PeripheralBatteryService : IDisposable
 {
     private readonly BluetoothBatteryService _bluetooth;
     private readonly WirelessHidBatteryService _wireless;
     private readonly LogitechHidppService _logitech;
+    private readonly XInputBatteryService _xinput;
 
     public PeripheralBatteryService(
         BluetoothBatteryService bluetooth,
         WirelessHidBatteryService wireless,
-        LogitechHidppService logitech)
+        LogitechHidppService logitech,
+        XInputBatteryService xinput)
     {
         _bluetooth = bluetooth;
         _wireless = wireless;
         _logitech = logitech;
+        _xinput = xinput;
     }
 
     public async Task<IReadOnlyList<DeviceReading>> ScanAsync(
@@ -29,11 +33,24 @@ internal sealed class PeripheralBatteryService : IDisposable
         var bluetoothPreviewed = false;
         IReadOnlyList<DeviceReading>? earlyWireless = null;
         IReadOnlyList<DeviceReading>? lastBluetoothPreview = null;
+        IReadOnlyList<DeviceReading> xinput;
+        try
+        {
+            xinput = _xinput.Scan();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("XInput 扫描", ex);
+            xinput = Array.Empty<DeviceReading>();
+        }
         Action<IReadOnlyList<DeviceReading>> bluetoothPreview = readings =>
         {
             bluetoothPreviewed = true;
             lastBluetoothPreview = readings;
-            var combined = Merge(readings, earlyWireless ?? Array.Empty<DeviceReading>());
+            var combined = Merge(
+                readings,
+                earlyWireless ?? Array.Empty<DeviceReading>(),
+                xinput);
             preview?.Invoke(combined);
         };
 
@@ -74,14 +91,14 @@ internal sealed class PeripheralBatteryService : IDisposable
             if (!bluetoothPreviewed)
             {
                 earlyWireless = combinedWireless;
-                preview?.Invoke(combinedWireless);
+                preview?.Invoke(Merge(Array.Empty<DeviceReading>(), combinedWireless, xinput));
             }
             else if (lastBluetoothPreview != null)
             {
                 // Bluetooth preview already went out; refresh it with the
                 // Logitech devices that finished afterwards.
                 earlyWireless = combinedWireless;
-                preview?.Invoke(Merge(lastBluetoothPreview, combinedWireless));
+                preview?.Invoke(Merge(lastBluetoothPreview, combinedWireless, xinput));
             }
         }
         else
@@ -101,7 +118,7 @@ internal sealed class PeripheralBatteryService : IDisposable
             bluetooth = Array.Empty<DeviceReading>();
         }
 
-        var merged = Merge(bluetooth, combinedWireless);
+        var merged = Merge(bluetooth, combinedWireless, xinput);
         return merged
             .OrderByDescending(reading => reading.IsConnected)
             .ThenBy(reading => KindOrder(reading.Kind))
@@ -111,11 +128,14 @@ internal sealed class PeripheralBatteryService : IDisposable
 
     private static List<DeviceReading> Merge(
         IReadOnlyList<DeviceReading> bluetooth,
-        IReadOnlyList<DeviceReading> wireless)
+        IReadOnlyList<DeviceReading> wireless,
+        IReadOnlyList<DeviceReading>? xinput = null)
     {
         var result = new List<DeviceReading>(bluetooth);
         foreach (var candidate in wireless)
         {
+            if (XboxReadingFilter.IsXInput(candidate)) continue;
+
             var index = result.FindIndex(existing => SamePhysicalDevice(existing, candidate));
             if (index < 0)
             {
@@ -124,6 +144,11 @@ internal sealed class PeripheralBatteryService : IDisposable
             }
 
             result[index] = ChooseBetter(result[index], candidate);
+        }
+
+        if (xinput is { Count: > 0 })
+        {
+            result.AddRange(XboxReadingFilter.SelectVisible(xinput, result));
         }
 
         return result;

@@ -63,7 +63,9 @@ BatteryDock.exe --tray       静默启动（开机启动项使用）
 src/BatteryDock/
 ├─ Services/
 │  ├─ BluetoothBatteryService.cs    BLE / Windows / HFP
-│  ├─ WirelessHidBatteryService.cs  Razer / ATK / ROG / MCHOSE / COMPX
+│  ├─ XInputBatteryService.cs       Xbox 适配器 / USB 四档电量
+│  ├─ XboxReadingFilter.cs          蓝牙 / XInput 去重
+│  ├─ WirelessHidBatteryService.cs  Razer / ATK / ROG / MCHOSE / COMPX / DualSense / GameSir / BETOP
 │  ├─ LogitechHidppService.cs       HID++ 2.0、稳定 ID、接收器通知
 │  ├─ MouseDpiService.cs            DPI / 回报率路由
 │  ├─ PeripheralBatteryService.cs   合并数据源

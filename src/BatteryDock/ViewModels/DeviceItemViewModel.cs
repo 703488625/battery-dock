@@ -18,6 +18,8 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
         IsEstimated = reading.IsEstimated;
         IsCharging = reading.IsCharging;
         IsFull = reading.IsFull;
+        IsWired = reading.IsWired;
+        UnavailableReason = reading.UnavailableReason;
         Origin = reading.Origin;
         ObservedAt = reading.ObservedAt;
     }
@@ -35,6 +37,8 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
     public bool IsEstimated { get; private set; }
     public bool IsCharging { get; private set; }
     public bool IsFull { get; private set; }
+    public bool IsWired { get; private set; }
+    public string UnavailableReason { get; private set; } = string.Empty;
     public bool HasChargingState => IsCharging || IsFull;
     public string ChargingText => IsFull ? "已充满" : "充电中";
     public BatteryOrigin Origin { get; private set; }
@@ -57,6 +61,8 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
         IsEstimated = reading.IsEstimated;
         IsCharging = reading.IsCharging;
         IsFull = reading.IsFull;
+        IsWired = reading.IsWired;
+        UnavailableReason = reading.UnavailableReason;
         Origin = reading.Origin;
         ObservedAt = reading.ObservedAt;
 
@@ -65,15 +71,26 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
     }
 
-    public string PercentText => Battery.HasValue
-        ? $"{(IsEstimated ? "≈" : string.Empty)}{Battery.Value}%"
-        : "—";
+    public string PercentText => IsWired
+        ? "有线"
+        : Battery.HasValue
+            ? $"{(IsEstimated ? "≈" : string.Empty)}{Battery.Value}%"
+            : "—";
 
     public double BatteryValue => Battery ?? 0;
 
     public bool HasBattery => Battery.HasValue;
 
-    public string TransportLabel => Transport == DeviceTransport.Wireless24G ? "2.4G" : "蓝牙";
+    public string BatteryGroup => IsWired || !Battery.HasValue
+        ? "其他"
+        : IsEstimated ? "档位电量" : "精确电量";
+
+    public string TransportLabel => Transport switch
+    {
+        DeviceTransport.Wireless24G => "2.4G",
+        DeviceTransport.Usb => "USB",
+        _ => "蓝牙"
+    };
 
     public string KindLabel => Kind switch
     {
@@ -112,6 +129,11 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
         {
             if (IsConnected)
             {
+                if (IsWired)
+                {
+                    return $"{KindLabel} · {TransportLabel} · 已连接 · 有线供电";
+                }
+
                 if (Origin == BatteryOrigin.Current && Battery.HasValue)
                 {
                     return $"{KindLabel} · {TransportLabel} · 已连接 · {RelativeTime(ObservedAt)}";
@@ -120,6 +142,11 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
                 if (Battery.HasValue)
                 {
                     return $"{KindLabel} · {TransportLabel} · 已连接 · 上次 {Battery.Value}% · {RelativeTime(ObservedAt)}";
+                }
+
+                if (!string.IsNullOrWhiteSpace(UnavailableReason))
+                {
+                    return $"{KindLabel} · {TransportLabel} · {UnavailableReason}";
                 }
 
                 if (Transport == DeviceTransport.Wireless24G)
@@ -151,12 +178,21 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
         get
         {
             var address = string.IsNullOrWhiteSpace(Address) ? "地址未知" : Address;
-            var estimateNote = IsEstimated ? "（推算值）" : string.Empty;
+            var isXInput = Key.StartsWith("xinput:", StringComparison.OrdinalIgnoreCase);
+            var estimateNote = IsEstimated
+                ? isXInput ? "（XInput 4 档估算）" : "（推算值）"
+                : string.Empty;
             var action = Kind switch
             {
                 DeviceKind.Keyboard => "点击打开键盘按键测试",
                 DeviceKind.Mouse => "点击打开鼠标 DPI 设置",
                 DeviceKind.Headset => "耳机暂不支持打开设置",
+                DeviceKind.Gamepad when isXInput =>
+                    IsWired ? "USB 有线供电，无电池读数" : "Xbox 手柄通过系统 XInput 读取",
+                DeviceKind.Gamepad when Transport == DeviceTransport.Usb =>
+                    "USB 手柄电量由 HID 报告读取",
+                DeviceKind.Gamepad when Transport == DeviceTransport.Wireless24G =>
+                    "手柄电量由厂商 HID 协议读取",
                 _ => "点击打开 Windows 蓝牙设置"
             };
             return $"{Name}\n{StatusText}{estimateNote}\n{address}\n\n{action}";

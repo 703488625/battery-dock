@@ -5,6 +5,41 @@ All notable changes to BatteryDock are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Xbox controller support:
+  - Bluetooth Xbox controllers use the standard BLE Battery Service
+    (`0x180F` / `0x2A19`) for an exact percentage.
+  - Xbox Wireless Adapter and USB controllers use Windows XInput
+    (`XInputGetBatteryInformation`) with the four battery levels mapped to
+    `10 / 40 / 70 / 100%`; wired controllers show “有线” instead of a fake
+    percentage.
+  - Deduplicates Bluetooth and XInput views of the same controller with the
+    `max(0, XInput wireless slots - connected Bluetooth Xbox controllers)`
+    rule and prefers the BLE percentage.
+- Added an `XInput 槽位` identity and “USB” transport label for Xbox devices.
+- Sony DualSense USB battery parsing (byte 52: level nibble ×10, charge nibble).
+- GameSir T4N2 (Nova 2 Lite) exact battery / charging protocol with MAC-based
+  stable identity; Bluetooth mode reports an unavailable reason.
+- BETOP Kunpeng 20 receiver protocol (`02 15`, battery at byte 2, charge at
+  byte 4 low nibble).
+- BLE GATT reads retry up to 3 times after `Unreachable`, releasing and
+  reopening the device/service between attempts.
+- Device list groups “精确电量 / 档位电量 / 其他”, and unavailable devices show
+  a concrete reason instead of an unexplained dash.
+- Low-battery notifications repeat every 30 minutes until charging or recovery.
+
+### Notes
+
+- The XInput path has not been verified on physical Xbox hardware in this
+  repository. The BLE path reuses the already-tested generic BLE reader.
+- DualSense USB, GameSir T4N2, and BETOP paths were implemented from protocol
+  facts but were not verified on physical hardware in this repository.
+- DualSense Bluetooth remains unsupported because its report layout differs
+  from USB.
+
 ## [1.0.0] - 2026-10-26
 
 First public release.

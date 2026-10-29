@@ -20,7 +20,8 @@ public enum BatteryOrigin
 public enum DeviceTransport
 {
     Bluetooth = 0,
-    Wireless24G = 1
+    Wireless24G = 1,
+    Usb = 2
 }
 
 public sealed class DeviceReading
@@ -35,6 +36,8 @@ public sealed class DeviceReading
     public bool IsEstimated { get; init; }
     public bool IsCharging { get; init; }
     public bool IsFull { get; init; }
+    public bool IsWired { get; init; }
+    public string UnavailableReason { get; init; } = string.Empty;
     public BatteryOrigin Origin { get; init; }
     public DateTimeOffset? ObservedAt { get; init; }
     public bool IsFreshBattery => Origin == BatteryOrigin.Current && Battery.HasValue;

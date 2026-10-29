@@ -6,20 +6,24 @@ using HidSharp;
 namespace BatteryDock.Services;
 
 /// <summary>
-/// Reads 2.4 GHz peripherals through their vendor HID collections. There is no
-/// standard battery protocol for these receivers: each vendor uses its own
-/// command. The implementations here cover Razer's 90-byte feature-report
-/// protocol, ATK Z87 / Compx keyboards, and the two common Nordic ATK/VXE mouse
-/// protocols. Other devices remain simply unsupported rather than guessed.
+/// Reads 2.4 GHz peripherals and wired controllers through their vendor HID
+/// collections. There is no standard battery protocol: each vendor uses its
+/// own command. Implementations here cover Razer, ATK/VXE, ROG Omni, MCHOSE,
+/// Sony DualSense (USB), GameSir T4N2, and BETOP Kunpeng receivers.
 /// </summary>
 internal sealed class WirelessHidBatteryService
 {
     private static readonly HashSet<int> SupportedVendors =
-        new() { 0x1532, 0x373B, 0x3554, 0x320F, 0x0B05, 0x5253, 0x3837 };
+        new() { 0x1532, 0x373B, 0x3554, 0x320F, 0x0B05, 0x5253, 0x3837, 0x054C, 0x3537, 0x20BC };
     private static readonly int[] RazerTransactionIds = { 0x1F, 0x9F, 0x3F, 0xFF };
     private static int _atkRequestCode;
 
-    private sealed record BatteryProbeResult(int Percent, bool Charging, bool Full);
+    private sealed record BatteryProbeResult(
+        int Percent,
+        bool Charging,
+        bool Full,
+        DeviceTransport Transport = DeviceTransport.Wireless24G,
+        string? StableId = null);
 
     private static readonly Regex HeadsetRegex = new(
         @"headset|headphone|earbud|airpods|buds|blackshark|barracuda|kraken|nari",
@@ -30,6 +34,12 @@ internal sealed class WirelessHidBatteryService
     private static readonly Regex MouseRegex = new(
         @"mouse|deathadder|basilisk|viper|naga|mamba|lancehead|orochi|cobra|pro click|g502|g304|g305|g pro|gpx|superlight|zaopin|scyrox|dareu",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex GameSirNameRegex = new(
+        @"gamesir|nova|t4n2|controller|gamepad|xbox",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex BetopNameRegex = new(
+        @"betop|btp|kunpeng|鲲鹏|controller|gamepad",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private readonly bool _demo;
     private readonly LastKnownStore _lastKnown;
@@ -143,15 +153,30 @@ internal sealed class WirelessHidBatteryService
         var isRog = group.VendorId == 0x0B05;
         var isMchose = group.VendorId is 0x5253 or 0x3837;
         var isMchoseG3 = group.VendorId == 0x3837 && group.ProductId == 0x4245;
+        var isSony = group.VendorId == 0x054C;
+        var isDualSense = isSony && group.ProductId is 0x0CE6 or 0x0DF2;
         var likelyWirelessRazer = isRazer && IsLikelyWirelessRazer(group);
         var kind = GuessKind(group);
         var isAtkKeyboard = IsAtkKeyboard(group);
+        var isGameSir = group.VendorId == 0x3537 &&
+                        kind is not (DeviceKind.Keyboard or DeviceKind.Mouse) &&
+                        (group.ProductId == 0x02E0 || GameSirNameRegex.IsMatch(group.Name));
+        var isGameSirBluetooth = isGameSir && group.ProductId == 0x02E0;
+        var isBetop = group.VendorId == 0x20BC &&
+                      kind is not (DeviceKind.Keyboard or DeviceKind.Mouse) &&
+                      BetopNameRegex.IsMatch(group.Name);
 
         // The G3 family uses a different protocol; do not feed it the L7
         // mouse commands or classify it as a supported mouse.
         if (isMchoseG3) return null;
 
+        // Sony sells many HID devices under the same vendor id. Only the
+        // DualSense gamepad interface has the report layout we understand;
+        // never send a mouse/ATK probe to an unrelated Sony device.
+        if (isSony && !isDualSense) return null;
+
         BatteryProbeResult? battery = null;
+        string? unavailableReason = null;
         if (isRazer)
         {
             battery = TryReadRazer(group, cancellationToken);
@@ -166,6 +191,31 @@ internal sealed class WirelessHidBatteryService
             battery = TryReadMchose(group, cancellationToken);
             if (battery != null) kind = DeviceKind.Mouse;
         }
+        else if (isDualSense)
+        {
+            kind = DeviceKind.Gamepad;
+            battery = TryReadDualSense(group, cancellationToken);
+            if (battery == null) unavailableReason = "DualSense 暂未上报电量，请用 USB 连接后重试";
+        }
+        else if (isGameSir)
+        {
+            kind = DeviceKind.Gamepad;
+            if (isGameSirBluetooth)
+            {
+                unavailableReason = "盖世小鸡蓝牙模式不开放电量查询";
+            }
+            else
+            {
+                battery = TryReadGameSir(group, cancellationToken);
+                if (battery == null) unavailableReason = "盖世小鸡接收器暂未响应电量查询";
+            }
+        }
+        else if (isBetop)
+        {
+            kind = DeviceKind.Gamepad;
+            battery = TryReadBetop(group, cancellationToken);
+            if (battery == null) unavailableReason = "北通接收器暂未响应电量查询，按一下手柄后重试";
+        }
         else if (isAtkKeyboard)
         {
             battery = TryReadAtkKeyboard(group, cancellationToken);
@@ -176,7 +226,9 @@ internal sealed class WirelessHidBatteryService
                       ?? TryReadHechiMouse(group, cancellationToken);
         }
 
-        var key = BuildKey(group);
+        var key = battery?.StableId is { Length: > 0 } stableId
+            ? stableId
+            : BuildKey(group);
         var lastKnown = _lastKnown.Get(key);
         if (battery != null)
         {
@@ -184,8 +236,9 @@ internal sealed class WirelessHidBatteryService
         }
 
         // A receiver for an unsupported/wired Razer device with no history is
-        // not a battery device for this app and would only add noise.
-        if (battery == null && lastKnown == null &&
+        // not a battery device for this app and would only add noise. Known
+        // controller protocols are kept visible with an unavailable reason.
+        if (battery == null && lastKnown == null && unavailableReason == null &&
             !likelyWirelessRazer && !isAtkKeyboard &&
             group.VendorId is not (0x373B or 0x3554 or 0x320F))
         {
@@ -229,6 +282,23 @@ internal sealed class WirelessHidBatteryService
         {
             displayName = "MCHOSE 无线鼠标";
         }
+        else if (isDualSense && string.IsNullOrWhiteSpace(displayName))
+        {
+            displayName = "DualSense Wireless Controller";
+        }
+        else if (isGameSir && string.IsNullOrWhiteSpace(displayName))
+        {
+            displayName = "GameSir 手柄";
+        }
+        else if (isBetop && string.IsNullOrWhiteSpace(displayName))
+        {
+            displayName = "BETOP 手柄";
+        }
+
+        var transport = battery?.Transport
+                        ?? (isDualSense ? DeviceTransport.Usb
+                            : isGameSirBluetooth ? DeviceTransport.Bluetooth
+                            : DeviceTransport.Wireless24G);
 
         return new DeviceReading
         {
@@ -236,13 +306,14 @@ internal sealed class WirelessHidBatteryService
             Name = displayName,
             Address = $"USB {group.VendorId:X4}:{group.ProductId:X4}",
             Kind = kind,
-            Transport = DeviceTransport.Wireless24G,
+            Transport = transport,
             IsConnected = true,
             Battery = shownBattery,
             IsCharging = isCharging,
             IsFull = isFull,
             Origin = origin,
-            ObservedAt = observedAt
+            ObservedAt = observedAt,
+            UnavailableReason = unavailableReason ?? string.Empty
         };
     }
 
@@ -423,6 +494,196 @@ internal sealed class WirelessHidBatteryService
 
         percent = rawPercent;
         charging = chargingFlag == 1;
+        return true;
+    }
+
+    /// <summary>
+    /// DualSense USB input report: byte 52 low nibble is the 0-10 battery
+    /// level (x10 = percent), high nibble is charge state 1/2. USB only; the
+    /// Bluetooth report has a different layout, so BTHENUM interfaces are
+    /// deliberately skipped.
+    /// </summary>
+    private static BatteryProbeResult? TryReadDualSense(
+        HidGroup group, CancellationToken cancellationToken)
+    {
+        foreach (var device in group.Devices)
+        {
+            if (device.DevicePath.Contains("BTHENUM", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var inputLength = SafeReportLength(device, Reports.Input);
+            var outputLength = SafeReportLength(device, Reports.Output);
+            if (inputLength < 53 || outputLength < 48) continue;
+
+            using var hid = new HidNativeDevice(device.DevicePath);
+            DrainInput(hid, inputLength, cancellationToken);
+
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var timeout = attempt == 0
+                    ? TimeSpan.FromMilliseconds(500)
+                    : TimeSpan.FromMilliseconds(250);
+                var response = hid.ReadAsync(inputLength, timeout, cancellationToken)
+                    .GetAwaiter().GetResult();
+                if (!TryParseDualSense(response, out var percent, out var charging, out var full))
+                {
+                    continue;
+                }
+
+                var stableId = string.IsNullOrWhiteSpace(group.Serial)
+                    ? null
+                    : $"sony:{group.Serial}";
+                Logger.Info($"HID：DualSense {group.Name} = {percent}%" +
+                            $"{(full ? "（已充满）" : charging ? "（充电中）" : string.Empty)}");
+                return new BatteryProbeResult(
+                    percent, charging, full, DeviceTransport.Usb, stableId);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryParseDualSense(
+        byte[]? response, out int percent, out bool charging, out bool full)
+    {
+        percent = 0;
+        charging = false;
+        full = false;
+        if (response == null || response.Length < 53 || response[0] != 0x01) return false;
+
+        var raw = response[52];
+        var level = raw & 0x0F;
+        var chargeState = (raw >> 4) & 0x0F;
+        if (level > 10) return false;
+
+        percent = Math.Clamp(level * 10, 0, 100);
+        charging = chargeState is 1 or 2;
+        full = charging && percent >= 100;
+        return true;
+    }
+
+    /// <summary>
+    /// GameSir T4N2 (Nova 2 Lite) vendor report: write 65 bytes with the
+    /// 00 01 01 00 header, then read a 65-byte reply whose MAC is at [2..7],
+    /// battery percent at [19], and charge flag at [20]. Bluetooth interfaces
+    /// intentionally do not expose this query.
+    /// </summary>
+    private static BatteryProbeResult? TryReadGameSir(
+        HidGroup group, CancellationToken cancellationToken)
+    {
+        if (group.ProductId == 0x02E0) return null;
+
+        foreach (var device in group.Devices.Where(device =>
+                     SafeReportLength(device, Reports.Input) >= 21 &&
+                     SafeReportLength(device, Reports.Output) >= 4))
+        {
+            var inputLength = SafeReportLength(device, Reports.Input);
+            var outputLength = SafeReportLength(device, Reports.Output);
+            using var hid = new HidNativeDevice(device.DevicePath);
+            DrainInput(hid, inputLength, cancellationToken);
+
+            var request = new byte[outputLength];
+            request[0] = 0x00;
+            request[1] = 0x01;
+            request[2] = 0x01;
+            request[3] = 0x00;
+            if (!hid.WriteAsync(request, cancellationToken).GetAwaiter().GetResult()) continue;
+
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var response = hid.ReadAsync(
+                        inputLength,
+                        attempt == 0 ? TimeSpan.FromMilliseconds(300) : TimeSpan.FromMilliseconds(180),
+                        cancellationToken)
+                    .GetAwaiter().GetResult();
+                if (response == null || response.Length < 21) continue;
+                if (response[0] != 0x00 || response[1] != 0x01) continue;
+
+                var percent = response[19];
+                var chargeFlag = response[20];
+                if (percent > 100) continue;
+
+                var charging = chargeFlag != 0;
+                var mac = Convert.ToHexString(response, 2, 6);
+                Logger.Info($"HID：GameSir T4N2 = {percent}% (MAC {mac})" +
+                            $"{(charging ? "（充电中）" : string.Empty)}");
+                return new BatteryProbeResult(
+                    percent, charging, charging && percent >= 100,
+                    DeviceTransport.Wireless24G, $"gamesir:{mac}");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// BETOP Kunpeng 20 receiver: vendor interface query 02 15 (padded to
+    /// 64/32/16 bytes); reply header 15, battery at byte 2 and charging in
+    /// the low nibble of byte 4.
+    /// </summary>
+    private static BatteryProbeResult? TryReadBetop(
+        HidGroup group, CancellationToken cancellationToken)
+    {
+        foreach (var device in group.Devices.Where(device =>
+                     SafeReportLength(device, Reports.Input) >= 5 &&
+                     SafeReportLength(device, Reports.Output) >= 16))
+        {
+            var inputLength = SafeReportLength(device, Reports.Input);
+            using var hid = new HidNativeDevice(device.DevicePath);
+            DrainInput(hid, inputLength, cancellationToken);
+
+            foreach (var writeLength in new[] { 64, 32, 16 })
+            {
+                if (SafeReportLength(device, Reports.Output) < writeLength) continue;
+
+                var request = new byte[writeLength];
+                request[0] = 0x02;
+                request[1] = 0x15;
+                if (!hid.WriteAsync(request, cancellationToken).GetAwaiter().GetResult()) continue;
+
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var response = hid.ReadAsync(
+                            inputLength,
+                            attempt == 0 ? TimeSpan.FromMilliseconds(500) : TimeSpan.FromMilliseconds(220),
+                            cancellationToken)
+                        .GetAwaiter().GetResult();
+                    if (!TryParseBetop(response, out var percent, out var charging, out var full))
+                    {
+                        continue;
+                    }
+
+                    var stableId = string.IsNullOrWhiteSpace(group.Serial)
+                        ? $"betop:{group.ProductId:X4}:{NormalizeName(group.Name)}"
+                        : $"betop:{group.Serial}";
+                    Logger.Info($"HID：BETOP {group.Name} = {percent}%" +
+                                $"{(full ? "（已充满）" : charging ? "（充电中）" : string.Empty)}");
+                    return new BatteryProbeResult(
+                        percent, charging, full, DeviceTransport.Wireless24G, stableId);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryParseBetop(
+        byte[]? response, out int percent, out bool charging, out bool full)
+    {
+        percent = 0;
+        charging = false;
+        full = false;
+        if (response == null || response.Length < 5) return false;
+        if (response[0] != 0x02 || response[1] != 0x15) return false;
+
+        var raw = response[2];
+        if (raw > 100) return false;
+
+        percent = raw;
+        charging = (response[4] & 0x0F) != 0;
+        full = charging && percent >= 100;
         return true;
     }
 

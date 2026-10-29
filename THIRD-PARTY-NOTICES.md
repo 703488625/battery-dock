@@ -27,6 +27,36 @@ bundled.
 - **JPITSG/BluetoothBatteryMonitor** (MIT) — HFP battery property lookup and
   general Windows Bluetooth device handling ideas.
   <https://github.com/JPITSG/BluetoothBatteryMonitor>
+- **94leon/XboxControllerBatteryMonitor** (MIT) — dual BLE / XInput Xbox
+  controller channels, four-level percentage mapping and the `K - N`
+  Bluetooth/XInput deduplication rule. Only API usage and protocol facts were
+  used; no source code was copied.
+  <https://github.com/94leon/XboxControllerBatteryMonitor>
+- **NiyaShy/XB1ControllerBatteryIndicator** (GPL-2.0) — XInput battery type /
+  level semantics and multi-slot polling behavior. Only API facts were used;
+  no source code from this GPL project is included in BatteryDock.
+  <https://github.com/NiyaShy/XB1ControllerBatteryIndicator>
+
+## Controller battery references
+
+- **yuanyuandada/peripheral-battery-widget** (MIT) — GameSir T4N2 vendor
+  report (`00 01 01 00`, MAC at [2..7], battery at [19], charge at [20]),
+  exact/tier grouping, and desktop-widget interaction ideas.
+  <https://github.com/yuanyuandada/peripheral-battery-widget>
+- **a1156883061/ds-battery-indicator** (no license) — DualSense USB input
+  report byte 52 semantics. The repository has no license file, so no source
+  code was copied; only protocol facts (also documented by the Linux kernel
+  `hid-playstation.c`) were used.
+  <https://github.com/a1156883061/ds-battery-indicator>
+- **oitsukiii/betop-battery** (MIT) — BETOP Kunpeng 20 vendor frame
+  (`02 15`, battery at byte 2, charge at byte 4 low nibble) and the
+  data-driven device-descriptor idea.
+  <https://github.com/oitsukiii/betop-battery>
+- **XingYu-999/ControllerForwardingTool** (MIT) — BLE GATT discovery retry
+  pattern (release/reopen after `Unreachable`) and Nintendo Switch 2 Pro
+  battery report facts. Only the retry idea and protocol facts were used;
+  its virtual-controller/USB-IP stack is not included.
+  <https://github.com/XingYu-999/ControllerForwardingTool>
 
 ## 2.4 GHz protocol references
 

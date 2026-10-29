@@ -329,6 +329,11 @@ public partial class TrayPopupWindow : Window
                 // Headsets have no supported settings/control page in this version.
                 break;
 
+            case DeviceKind.Gamepad when device.Transport != DeviceTransport.Bluetooth:
+                // Xbox adapter / USB controllers are read through XInput and
+                // have no settings page; do not send the user to Bluetooth.
+                break;
+
             default:
                 HidePanel();
                 _viewModel.OpenBluetoothSettingsCommand.Execute(null);

@@ -277,22 +277,53 @@ internal sealed class BluetoothBatteryService : IDisposable
     private async Task<(int? Battery, DeviceKind? Kind)> TryReadLeBatteryAsync(
         Endpoint endpoint, CancellationToken cancellationToken)
     {
+        DeviceKind? lastKind = null;
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            var result = await TryReadLeBatteryOnceAsync(endpoint, cancellationToken);
+            lastKind = result.Kind ?? lastKind;
+
+            if (result.Battery.HasValue || !result.Retryable)
+            {
+                return (result.Battery, lastKind);
+            }
+
+            if (attempt < 3)
+            {
+                Logger.Info($"BLE GATT 不可达，重试 {endpoint.Name}（{attempt}/3）");
+                await Task.Delay(TimeSpan.FromMilliseconds(800), cancellationToken);
+            }
+        }
+
+        return (null, lastKind);
+    }
+
+    /// <summary>
+    /// One GATT read attempt. Unreachable failures are retried by the caller
+    /// after releasing the device/service references, which matches the
+    /// recovery pattern needed when Windows keeps a stale BLE session.
+    /// </summary>
+    private async Task<(int? Battery, DeviceKind? Kind, bool Retryable)> TryReadLeBatteryOnceAsync(
+        Endpoint endpoint, CancellationToken cancellationToken)
+    {
         BluetoothLEDevice? device = null;
         GattDeviceService? service = null;
         try
         {
-            device = await WithTimeout(BluetoothLEDevice.FromIdAsync(endpoint.Id), TimeSpan.FromSeconds(3), cancellationToken);
+            device = await WithTimeout(
+                BluetoothLEDevice.FromIdAsync(endpoint.Id),
+                TimeSpan.FromSeconds(3), cancellationToken);
             if (device == null)
             {
                 Logger.Info($"无法打开 BLE 设备：{endpoint.Name}");
-                return (null, null);
+                return (null, null, true);
             }
 
             var kind = KindFromAppearance(device.Appearance.RawValue);
             if (device.ConnectionStatus != BluetoothConnectionStatus.Connected)
             {
                 Logger.Info($"BLE 设备当前不在连接状态：{endpoint.Name}");
-                return (null, kind);
+                return (null, kind, false);
             }
 
             var services = await WithTimeout(
@@ -315,13 +346,14 @@ internal sealed class BluetoothBatteryService : IDisposable
             if (services.Status != GattCommunicationStatus.Success || service == null)
             {
                 Logger.Info($"设备没有可访问的电量服务：{endpoint.Name} ({services.Status})");
-                return (null, kind);
+                return (null, kind, services.Status == GattCommunicationStatus.Unreachable);
             }
 
             var characteristics = await WithTimeout(
                 service.GetCharacteristicsForUuidAsync(BatteryLevelUuid, BluetoothCacheMode.Cached),
                 TimeSpan.FromSeconds(2), cancellationToken);
-            if (characteristics.Status != GattCommunicationStatus.Success || characteristics.Characteristics.Count == 0)
+            if (characteristics.Status != GattCommunicationStatus.Success ||
+                characteristics.Characteristics.Count == 0)
             {
                 characteristics = await WithTimeout(
                     service.GetCharacteristicsForUuidAsync(BatteryLevelUuid, BluetoothCacheMode.Uncached),
@@ -332,7 +364,7 @@ internal sealed class BluetoothBatteryService : IDisposable
             if (characteristics.Status != GattCommunicationStatus.Success || characteristic == null)
             {
                 Logger.Info($"设备没有电量特征值：{endpoint.Name} ({characteristics.Status})");
-                return (null, kind);
+                return (null, kind, characteristics.Status == GattCommunicationStatus.Unreachable);
             }
 
             var read = await WithTimeout(
@@ -342,14 +374,18 @@ internal sealed class BluetoothBatteryService : IDisposable
 
             if (!battery.HasValue)
             {
-                read = await WithTimeout(
+                var cachedRead = await WithTimeout(
                     characteristic.ReadValueAsync(BluetoothCacheMode.Cached),
                     TimeSpan.FromSeconds(2), cancellationToken);
-                battery = ParseGattBattery(read);
+                battery = ParseGattBattery(cachedRead);
+                if (!battery.HasValue && cachedRead.Status == GattCommunicationStatus.Unreachable)
+                {
+                    return (null, kind, true);
+                }
             }
 
             if (battery.HasValue) Logger.Info($"BLE 电量：{endpoint.Name} = {battery}%");
-            return (battery, kind);
+            return (battery, kind, false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -358,12 +394,12 @@ internal sealed class BluetoothBatteryService : IDisposable
         catch (TimeoutException)
         {
             Logger.Info($"读取 BLE 电量超时：{endpoint.Name}");
-            return (null, null);
+            return (null, null, false);
         }
         catch (Exception ex)
         {
             Logger.Info($"读取 BLE 电量失败：{endpoint.Name}：{ex.Message}");
-            return (null, null);
+            return (null, null, false);
         }
         finally
         {
@@ -495,7 +531,8 @@ internal sealed class BluetoothBatteryService : IDisposable
         {
             if (category.Contains("input.keyboard")) return DeviceKind.Keyboard;
             if (category.Contains("input.mouse")) return DeviceKind.Mouse;
-            if (category.Contains("input.gaming") || category.Contains("input.game")) return DeviceKind.Gamepad;
+            if (category.Contains("input.gaming") || category.Contains("input.game") ||
+                category.Contains("gamepad")) return DeviceKind.Gamepad;
             if (category.Contains("audio.headphone") || category.Contains("audio.headset") ||
                 category.Contains("communication.headset")) return DeviceKind.Headset;
             if (category.Contains("communication.phone")) return DeviceKind.Phone;
