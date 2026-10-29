@@ -24,7 +24,7 @@
 
 点开任务栏隐藏图标就能看电量。界面采用液态玻璃风格：半透明玻璃壳、柔和的环境光场、渐变边缘高光和内外阴影。设置 → 外观 → 主题可以切换“跟随系统 / 浅色 / 深色”，玻璃材质会同步适配。
 
-> **下载**：从 [GitHub Releases](https://github.com/703488625/battery-dock/releases/latest) 下载 `BatteryDock-v1.0.0-win-x64.zip`，解压后运行 `BatteryDock.exe`。  
+> **下载**：从 [GitHub Releases](https://github.com/703488625/battery-dock/releases/latest) 下载 `BatteryDock-v1.1.0-win-x64.zip`，解压后运行 `BatteryDock.exe`。
 > 这是自包含单文件程序，不需要安装 .NET；第一次运行可能遇到 SmartScreen，选择“更多信息 → 仍要运行”。
 
 ![电量坞界面](docs/screenshot.png)

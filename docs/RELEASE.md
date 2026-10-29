@@ -2,15 +2,15 @@
 
 ## 版本约定
 
-- 使用语义化版本：`MAJOR.MINOR.PATCH`，Git tag 为 `v1.0.0`。
-- 首次公开版本：`v1.0.0`。
+- 使用语义化版本：`MAJOR.MINOR.PATCH`，Git tag 为 `v1.1.0`。
+- 当前版本：`v1.1.0`；首次公开版本：`v1.0.0`。
 - 只在协议/功能/兼容性发生变化时升版本；文档修正可以只更新 README。
 
 版本号写在 `src/BatteryDock/BatteryDock.csproj`：
 
 ```xml
-<Version>1.0.0</Version>
-<FileVersion>1.0.0.0</FileVersion>
+<Version>1.1.0</Version>
+<FileVersion>1.1.0.0</FileVersion>
 ```
 
 ## 发布前检查
@@ -40,14 +40,14 @@ dist\BatteryDock.exe.sha256
 ## 生成发布压缩包
 
 ```powershell
-.\scripts\release.ps1 -Version 1.0.0
+.\scripts\release.ps1 -Version 1.1.0
 ```
 
 输出：
 
 ```text
-release\BatteryDock-v1.0.0-win-x64.zip
-release\BatteryDock-v1.0.0-win-x64.zip.sha256
+release\BatteryDock-v1.1.0-win-x64.zip
+release\BatteryDock-v1.1.0-win-x64.zip.sha256
 ```
 
 压缩包包含：
@@ -69,8 +69,8 @@ release\BatteryDock-v1.0.0-win-x64.zip.sha256
 4. 创建 GitHub Release 并上传资产
 
 ```powershell
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 工作流完成后，在 Releases 页面检查：
@@ -82,10 +82,10 @@ git push origin v1.0.0
 
 ## 手动发布（没有 Actions 时）
 
-1. 本地执行 `.\scripts\release.ps1 -Version 1.0.0`
+1. 本地执行 `.\scripts\release.ps1 -Version 1.1.0`
 2. 打开 GitHub → Releases → Draft a new release
-3. Tag 选择 `v1.0.0`（或新建）
-4. 上传 `release\BatteryDock-v1.0.0-win-x64.zip` 和 `.sha256`
+3. Tag 选择 `v1.1.0`（或新建）
+4. 上传 `release\BatteryDock-v1.1.0-win-x64.zip` 和 `.sha256`
 5. 粘贴 `CHANGELOG.md` 对应段落
 6. 发布
 
@@ -102,8 +102,8 @@ git push origin v1.0.0
 用户可以用 PowerShell 验证：
 
 ```powershell
-Get-FileHash .\BatteryDock-v1.0.0-win-x64.zip -Algorithm SHA256
-Get-Content .\BatteryDock-v1.0.0-win-x64.zip.sha256
+Get-FileHash .\BatteryDock-v1.1.0-win-x64.zip -Algorithm SHA256
+Get-Content .\BatteryDock-v1.1.0-win-x64.zip.sha256
 ```
 
 或直接验证 exe：

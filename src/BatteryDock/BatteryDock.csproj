@@ -8,8 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>BatteryDock</RootNamespace>
     <AssemblyName>BatteryDock</AssemblyName>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
     <Product>电量坞</Product>
     <AssemblyTitle>电量坞</AssemblyTitle>
     <Description>简洁的蓝牙与 2.4G 键鼠、手柄电量托盘工具</Description>

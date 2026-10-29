@@ -14,7 +14,7 @@ body:
     attributes:
       label: BatteryDock version
       description: Release tag or the SHA-256 of BatteryDock.exe.
-      placeholder: v1.0.0 / d8b113...
+      placeholder: v1.1.0 / <BatteryDock.exe SHA-256>
     validations:
       required: true
 

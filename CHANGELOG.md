@@ -5,7 +5,7 @@ All notable changes to BatteryDock are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-29
 
 ### Added
 
@@ -91,4 +91,5 @@ First public release.
   implemented with layered translucency, ambient gradients, and highlights.
 - The executable is unsigned, so Windows SmartScreen may warn on first launch.
 
+[1.1.0]: https://github.com/703488625/battery-dock/releases/tag/v1.1.0
 [1.0.0]: https://github.com/703488625/battery-dock/releases/tag/v1.0.0
