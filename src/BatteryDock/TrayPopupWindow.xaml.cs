@@ -26,6 +26,8 @@ public partial class TrayPopupWindow : Window
 
     internal bool AutoHide { get; set; } = true;
 
+    internal bool HasOpenToolWindow => _toolWindow is { IsVisible: true };
+
     internal TrayPopupWindow(MainViewModel viewModel, MouseDpiService mouseDpi)
     {
         _viewModel = viewModel;

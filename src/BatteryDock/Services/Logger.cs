@@ -34,7 +34,7 @@ internal static class Logger
 
     public static void Error(string operation, Exception exception)
     {
-        Write("ERROR", $"{operation}: {exception.GetType().Name} (0x{exception.HResult:X8}) {exception.Message}");
+        Write("ERROR", $"{operation}: {exception.GetType().Name} (0x{exception.HResult:X8}) {exception.Message}\n{exception.StackTrace}");
     }
 
     private static void Write(string level, string message)

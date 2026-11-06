@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using BatteryDock.Models;
@@ -22,6 +23,8 @@ public partial class App : System.Windows.Application
     private TrayPopupWindow? _popup;
     private TrayIconManager? _tray;
     private DispatcherTimer? _refreshTimer;
+    private int _trimGeneration;
+    private bool _trimRunning;
     private static readonly TimeSpan LowBatteryRepeatInterval = TimeSpan.FromMinutes(30);
     private readonly Dictionary<string, DateTimeOffset> _lowNotifiedAt = new(StringComparer.OrdinalIgnoreCase);
 
@@ -35,6 +38,13 @@ public partial class App : System.Windows.Application
         var options = ParseArguments(e.Args);
         Logger.Initialize(options.Verbose);
         Logger.Info($"启动电量坞，参数：{string.Join(" ", e.Args)}");
+
+        if (options.DumpHid)
+        {
+            ShowHidDump();
+            Shutdown();
+            return;
+        }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
@@ -78,7 +88,7 @@ public partial class App : System.Windows.Application
 
             Logger.Info("步骤：创建弹窗");
             _popup = new TrayPopupWindow(_viewModel, mouseDpiService) { AutoHide = !_isDemo };
-            _popup.IsVisibleChanged += (_, _) => ConfigureRefreshTimer();
+            _popup.IsVisibleChanged += OnPopupVisibilityChanged;
             Logger.Info("步骤：创建托盘图标");
             _tray = new TrayIconManager(
                 onOpen: OnTrayOpen,
@@ -136,6 +146,7 @@ public partial class App : System.Windows.Application
             }
 
             await refreshTask;
+            ScheduleMemoryTrim();
 
             if (!demo && !_settingsService.Settings.WelcomeShown)
             {
@@ -188,7 +199,56 @@ public partial class App : System.Windows.Application
     {
         if (_isExiting || _viewModel == null) return;
         await _viewModel.RefreshAsync();
+        ScheduleMemoryTrim();
     }
+
+    private void OnPopupVisibilityChanged(object? sender, DependencyPropertyChangedEventArgs e)
+    {
+        ConfigureRefreshTimer();
+        if (_popup?.IsVisible == true)
+        {
+            _trimGeneration++;
+            return;
+        }
+
+        ScheduleMemoryTrim();
+    }
+
+    private void ScheduleMemoryTrim()
+    {
+        var generation = ++_trimGeneration;
+        _ = TrimMemoryAfterIdleAsync(generation);
+    }
+
+    private async Task TrimMemoryAfterIdleAsync(int generation)
+    {
+        await Task.Delay(2500);
+        if (_isExiting ||
+            _trimRunning ||
+            generation != _trimGeneration ||
+            _popup?.IsVisible == true ||
+            _popup?.HasOpenToolWindow == true ||
+            _viewModel?.IsRefreshing == true)
+        {
+            return;
+        }
+
+        _trimRunning = true;
+        try
+        {
+            await MemoryTrimmer.TrimAsync(CanTrimMemory);
+        }
+        finally
+        {
+            _trimRunning = false;
+        }
+    }
+
+    private bool CanTrimMemory() =>
+        !_isExiting &&
+        _popup?.IsVisible != true &&
+        _popup?.HasOpenToolWindow != true &&
+        _viewModel?.IsRefreshing != true;
 
     private void OnReadingsUpdated(IReadOnlyList<DeviceReading> readings)
     {
@@ -564,8 +624,27 @@ public partial class App : System.Windows.Application
             Demo: set.Contains("--demo"),
             Show: set.Contains("--show"),
             Settings: set.Contains("--settings"),
-            Verbose: set.Contains("--verbose"));
+            Verbose: set.Contains("--verbose"),
+            DumpHid: set.Contains("--dump-hid"));
     }
 
-    private sealed record StartupOptions(bool Demo, bool Show, bool Settings, bool Verbose);
+    private static void ShowHidDump()
+    {
+        try
+        {
+            var path = HidDiagnosticsService.WriteReport();
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                "HID 诊断导出失败。\n\n" + ex.Message,
+                "电量坞",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private sealed record StartupOptions(
+        bool Demo, bool Show, bool Settings, bool Verbose, bool DumpHid);
 }

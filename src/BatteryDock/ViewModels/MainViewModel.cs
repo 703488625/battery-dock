@@ -38,11 +38,6 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _isDemo = isDemo;
 
         DevicesView = CollectionViewSource.GetDefaultView(Devices);
-        if (DevicesView is ListCollectionView listView)
-        {
-            listView.GroupDescriptions.Add(
-                new PropertyGroupDescription(nameof(DeviceItemViewModel.BatteryGroup)));
-        }
 
         Settings = new SettingsViewModel(
             settingsService,
@@ -284,6 +279,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _visibleReadings = query
             .OrderByDescending(reading => reading.IsConnected)
+            .ThenBy(reading => reading.IsWired || !reading.HasBattery ? 2 : reading.IsEstimated ? 1 : 0)
             .ThenBy(reading => KindOrder(reading.Kind))
             .ThenBy(reading => reading.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
