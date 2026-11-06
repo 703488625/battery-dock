@@ -13,7 +13,8 @@ internal sealed class HidNativeDevice : IDisposable
 {
     private readonly string _path;
     private SafeFileHandle? _featureHandle;
-    private FileStream? _stream;
+    private FileStream? _readStream;
+    private FileStream? _writeStream;
 
     public HidNativeDevice(string path) => _path = path;
 
@@ -79,12 +80,48 @@ internal sealed class HidNativeDevice : IDisposable
         return OpenFeature() && HidD_GetFeature(_featureHandle!, buffer, buffer.Length);
     }
 
-    private bool OpenStream()
+    private bool OpenReadStream()
     {
-        if (_stream != null) return true;
+        if (_readStream != null) return true;
         try
         {
-            _stream = new FileStream(
+            _readStream = new FileStream(
+                _path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                bufferSize: 0,
+                FileOptions.Asynchronous);
+            return true;
+        }
+        catch
+        {
+            // Some devices require a read/write handle even for input.
+            try
+            {
+                _readStream = new FileStream(
+                    _path,
+                    FileMode.Open,
+                    FileAccess.ReadWrite,
+                    FileShare.ReadWrite,
+                    bufferSize: 0,
+                    FileOptions.Asynchronous);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Info($"打开 HID 读取流失败：{ex.Message}");
+                return false;
+            }
+        }
+    }
+
+    private bool OpenWriteStream()
+    {
+        if (_writeStream != null) return true;
+        try
+        {
+            _writeStream = new FileStream(
                 _path,
                 FileMode.Open,
                 FileAccess.ReadWrite,
@@ -93,22 +130,36 @@ internal sealed class HidNativeDevice : IDisposable
                 FileOptions.Asynchronous);
             return true;
         }
-        catch (Exception ex)
+        catch
         {
-            Logger.Info($"打开 HID 数据流失败：{ex.Message}");
-            return false;
+            try
+            {
+                _writeStream = new FileStream(
+                    _path,
+                    FileMode.Open,
+                    FileAccess.Write,
+                    FileShare.ReadWrite,
+                    bufferSize: 0,
+                    FileOptions.Asynchronous);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Info($"打开 HID 写入流失败：{ex.Message}");
+                return false;
+            }
         }
     }
 
     public async Task<bool> WriteAsync(byte[] data, CancellationToken cancellationToken)
     {
-        if (!OpenStream()) return false;
+        if (!OpenWriteStream()) return false;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(1));
         try
         {
-            await _stream!.WriteAsync(data.AsMemory(), cts.Token);
-            await _stream.FlushAsync(cts.Token);
+            await _writeStream!.WriteAsync(data.AsMemory(), cts.Token);
+            await _writeStream.FlushAsync(cts.Token);
             return true;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -126,13 +177,13 @@ internal sealed class HidNativeDevice : IDisposable
     public async Task<byte[]?> ReadAsync(
         int length, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        if (!OpenStream()) return null;
+        if (!OpenReadStream()) return null;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
         var buffer = new byte[length];
         try
         {
-            var read = await _stream!.ReadAsync(buffer.AsMemory(0, length), cts.Token);
+            var read = await _readStream!.ReadAsync(buffer.AsMemory(0, length), cts.Token);
             if (read <= 0) return null;
             return read == length ? buffer : buffer[..read];
         }
@@ -151,13 +202,23 @@ internal sealed class HidNativeDevice : IDisposable
     {
         try
         {
-            _stream?.Dispose();
+            _readStream?.Dispose();
         }
         catch
         {
             // Ignore.
         }
-        _stream = null;
+        _readStream = null;
+
+        try
+        {
+            _writeStream?.Dispose();
+        }
+        catch
+        {
+            // Ignore.
+        }
+        _writeStream = null;
 
         try
         {

@@ -24,7 +24,7 @@
 
 点开任务栏隐藏图标就能看电量。界面采用液态玻璃风格：半透明玻璃壳、柔和的环境光场、渐变边缘高光和内外阴影。设置 → 外观 → 主题可以切换“跟随系统 / 浅色 / 深色”，玻璃材质会同步适配。
 
-> **下载**：从 [GitHub Releases](https://github.com/703488625/battery-dock/releases/latest) 下载 `BatteryDock-v1.1.0-win-x64.zip`，解压后运行 `BatteryDock.exe`。
+> **下载**：从 [GitHub Releases](https://github.com/703488625/battery-dock/releases/latest) 下载最新的 `BatteryDock-v*-win-x64.zip`，解压后运行 `BatteryDock.exe`。
 > 这是自包含单文件程序，不需要安装 .NET；第一次运行可能遇到 SmartScreen，选择“更多信息 → 仍要运行”。
 
 ![电量坞界面](docs/screenshot.png)
@@ -45,7 +45,7 @@
 
 - **蓝牙 + 2.4G 一起显示**：蓝牙外设和 USB 接收器外设放在同一个简洁面板里。
 - **Xbox 手柄**：蓝牙手柄走标准 BLE 电量；Xbox 无线适配器 / USB 有线手柄走 Windows XInput，显示四档估算电量，有线连接标为“有线”。
-- **更多手柄**：DualSense USB、盖世小鸡 T4N2、北通鲲鹏20 接收器使用各自的 HID 电量协议；读不到时会显示具体原因，而不是编造数字。
+- **更多手柄**：DualShock 4 / DualSense（USB / 蓝牙）、盖世小鸡 Nova 2 / T4N2 / G7 Pro、北通鲲鹏20 接收器使用各自的 HID 电量协议；读不到时会显示具体原因，而不是编造数字。
 - **托盘常驻**：不占任务栏，点击隐藏图标里的电池图标打开面板。
 - **自适应刷新**：面板打开时按设定频率刷新；面板关闭后自动降到至少 2 分钟一次，减少后台占用，最长不超过 10 分钟。
 - **充电状态**：支持读取充电/充满标志的设备会在卡片上显示“充电中 / 已充满”，托盘图标也会变为绿色。
@@ -74,15 +74,16 @@
 - 蓝牙和 XInput 同时看到同一台手柄时，优先保留蓝牙百分比，并按照 `XInput 无线槽位数 - 已连接蓝牙 Xbox 手柄数` 去除重复项。
 - 本机没有 Xbox 手柄，XInput 路径尚未实机验证；如果手柄刚连接时显示等待读数，按一下手柄按键即可。
 
-> **关于 DualSense**：当前只解析 USB 输入报告（第 52 字节），蓝牙 DualSense 的报告布局不同，暂未接入；需要手柄用 USB 连接。
-> **关于盖世小鸡**：T4N2 使用 65 字节厂商报文，回应里包含 MAC、电量与充电状态；2.4G/有线可读，蓝牙模式 PID `02E0` 不开放电量查询，界面会显示原因。
+> **关于 DualShock 4 / DualSense**：DualSense USB 读原始字节 53、蓝牙读 54；DS4 USB 读 30、蓝牙读 32。PS 手柄只提供 0–10 档电量，界面按 `(档位 × 10 + 5)%` 显示为 `≈` 近似值，不伪装成 1% 精度；异常状态不会被当成 0% 低电量。
+> **关于盖世小鸡**：Nova 2 / T4N2 使用 `usage_page 0xFF7A` 的 65 字节厂商报文，回应里包含 MAC、电量与充电状态；G7 Pro CE 使用 `0xFFF0` 配置通道，先尝试被动读取 `0x12` 状态流，没有数据才发 `0F F2 00` 心跳，电量在 `[36]`、充电在 `[35]`。2.4G/有线可读，蓝牙模式 PID `02E0` 不开放电量查询，界面会显示原因。
 > **关于北通**：鲲鹏20 接收器通过 `usage_page=0xFF00` 的厂商接口发送 `02 15`，电量在回包 byte[2]，充电状态在 byte[4] 低 4 位；不同型号可能只需改 report id / 偏移。
 
 ### 有线 / USB 手柄
 
 | 设备 | 状态 |
 |---|---|
-| 索尼 DualSense（USB，`054C:0CE6`；Edge `054C:0DF2`） | 读取 USB 输入报告第 52 字节：低 4 位电量档位 ×10，高 4 位充电状态；未实机验证 |
+| 索尼 DualSense（USB `054C:0CE6` / Edge `054C:0DF2`；蓝牙 `0x31`） | USB 读字节 53、蓝牙读 54；0–10 档 → `≈` 百分比；未实机验证 |
+| 索尼 DualShock 4（USB `054C:05C4/09CC`；蓝牙 `0x11`） | USB 读字节 30、蓝牙读 32；0–10 档 → `≈` 百分比；异常状态不报低电量；未实机验证 |
 | Xbox USB 有线手柄 | 通过 XInput 显示“有线”，不伪造电量 |
 
 ### 2.4G USB 接收器
@@ -92,7 +93,8 @@
 | 设备 | 状态 |
 |---|---|
 | Xbox 无线适配器（XInput，4 档估算 `10/40/70/100%`） | 按 XboxControllerBatteryMonitor / XB1ControllerBatteryIndicator 的 XInput 用法实现；未实机验证 |
-| 盖世小鸡 T4N2（Nova 2 Lite 等，VID `3537`，65 字节厂商报文） | 按 peripheral-battery-widget 的协议实现；本机无设备，未实机验证；蓝牙模式不开放查询 |
+| 盖世小鸡 Nova 2 / T4N2（VID `3537`，usage `0xFF7A`，`00 01 01 00` 查询） | 按 GamesirBatteryTray 的协议实现；本机无设备，未实机验证；蓝牙模式不开放查询 |
+| 盖世小鸡 G7 Pro CE（VID `3537`，usage `0xFFF0`，`0F F2 00` 心跳 + `0x12` 状态流） | 按 vigil-watt issue #22 的协议实现；本机无设备，未实机验证 |
 | 北通鲲鹏20（`20BC:5191`，vendor usage `0xFF00`，`02 15` 查询） | 按 betop-battery 的协议实现；本机无设备，未实机验证 |
 | 雷蛇（Razer）无线鼠标 / 键盘（90 字节 feature report，OpenRazer 协议） | 已实测 DeathAdder V2 X HyperSpeed |
 | ATK Z87（Evision Report 4 / 命令 0x1A，非零 16 位序号） | 已在本机 Z87 实测能读到真实电量（79%），保留旧 0x87 协议回退 |
@@ -120,7 +122,7 @@
 ### 目前不支持
 
 - 部分国产厂商私有 2.4G 协议（后续可按型号增加）；罗技 HID++ 1.0 老设备暂不含在内。
-- DualSense 蓝牙模式暂未解析（当前只支持 USB）；盖世小鸡蓝牙模式、其他北通型号也尚未验证。
+- 盖世小鸡蓝牙模式、其他北通型号尚未验证。PS 手柄只有 0–10 档，无法提供真正的 1% 精度。
 - ATK / VXE 鼠标的 DPI / 回报率修改、游戏鼠标侧键映射（需要逐型号的按键表和写入协议）暂未开放。
 - 部分雷蛇型号的固件不开放 HID 回报率切换命令；面板会提示不支持。
 - DPI 修改目前只写当前档位，不写入板载配置；重启或切换配置档后可能恢复原值。
@@ -153,6 +155,7 @@ BatteryDock.exe --show       启动后直接打开面板
 BatteryDock.exe --settings   启动后直接打开设置页
 BatteryDock.exe --demo       演示模式（假数据，方便预览界面）
 BatteryDock.exe --verbose    输出详细日志
+BatteryDock.exe --dump-hid   导出 HID 诊断报告（接口、UsagePage、描述符、原始帧）并打开
 BatteryDock.exe --tray       静默启动（开机启动项使用）
 ```
 
@@ -166,9 +169,14 @@ BatteryDock.exe --tray       静默启动（开机启动项使用）
 %LOCALAPPDATA%\BatteryDock\settings.json    设置
 %LOCALAPPDATA%\BatteryDock\last-known.json  上次电量
 %LOCALAPPDATA%\BatteryDock\app.log          诊断日志（--verbose 时详细）
+%LOCALAPPDATA%\BatteryDock\hid-dump-*.txt  HID 诊断报告（--dump-hid）
 ```
 
 卸载：退出托盘程序，删除 `BatteryDock.exe`；如果开启过开机启动，先在设置里关闭，再删除 `%LOCALAPPDATA%\BatteryDock`。
+
+### 资源占用
+
+面板关闭后，程序会在空闲时压缩大对象堆、连续执行最多三轮 GC/终结器清扫，再释放工作集。刚整理完工作集约 **6–14 MB**，空闲几分钟后通常稳定在 **10–25 MB**；打开面板时会短暂升到约 **130 MB**，这是 WPF 透明窗口和液态玻璃效果的主要开销，关闭后会自动回落。任务管理器的“内存”列显示的是工作集；提交大小会保留更多已提交但可换出的页面，不代表实际内存压力。
 
 ## 从源码构建
 

@@ -5,6 +5,52 @@ All notable changes to BatteryDock are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.1.1] - 2026-11-06
+
+### Added
+
+- GameSir G7 Pro CE support: `0xFFF0` config collection, passive `0x12`
+  state-stream read first, then `0F F2 00` heartbeat fallback (charge at [35],
+  battery at [36]).
+- DualShock 4 support (USB report `0x01` byte 30, Bluetooth `0x11` byte 32).
+- DualSense Bluetooth support (report `0x31` byte 54); fixed USB battery
+  offset to byte 53.
+- PS controller levels are shown as midpoint `≈` percentages, and fault
+  states (DS4 14/15, DualSense 0xA/0xB/0xF) are rejected instead of being
+  reported as 0%.
+- `--dump-hid` diagnostic report: HID interfaces, UsagePage, report IDs and
+  lengths, raw descriptors/frames, and standard battery probe results.
+- Standard HID battery fallback (`Battery Strength`, `Relative State of
+  Charge`, `Battery Level`, `Absolute State of Charge`) via
+  `HidP_GetUsageValue`.
+- ATK/VXE HID queries now prefer the `usage_page 0xFF05` vendor collection.
+- Separate HID read and write handles, avoiding concurrent I/O on one stream.
+
+### Changed
+
+- Removed the “精确电量 / 档位电量 / 其他” group headings from the device
+  list; devices stay ordered by connection state and battery precision, and
+  estimated values still use `≈`.
+- The hidden tray process now compacts the LOH (`CompactOnce`) and runs up to
+  three GC / finalizer passes 1.5 seconds apart before trimming its working
+  set. Measured idle working set dropped from about 326 MB to 6–14 MB right
+  after trimming (10–25 MB after several idle minutes); private commit after
+  opening and closing the panel fell from about 201 MB to about 194 MB, with a
+  fresh hidden process at about 120 MB.
+
+### Fixed
+
+- GameSir Nova 2 / T4N2 response parsing now accepts both reply forms
+  (with or without the leading HID report id), reads the MAC from payload
+  bytes 0–5, battery from payload byte 18, and charge from payload byte 19.
+  The previous fixed `[2..7]` / `[19]` layout rejected valid replies.
+- Standard HID battery probing now uses `HidD_GetInputReport` instead of a
+  cancellable asynchronous `FileStream.ReadAsync`. A timed-out overlapped HID
+  read could complete after disposal and crash the process with
+  `InvalidOperationException: Handle is not initialized`.
+
 ## [1.1.0] - 2026-10-29
 
 ### Added
@@ -91,5 +137,6 @@ First public release.
   implemented with layered translucency, ambient gradients, and highlights.
 - The executable is unsigned, so Windows SmartScreen may warn on first launch.
 
+[1.1.1]: https://github.com/703488625/battery-dock/releases/tag/v1.1.1
 [1.1.0]: https://github.com/703488625/battery-dock/releases/tag/v1.1.0
 [1.0.0]: https://github.com/703488625/battery-dock/releases/tag/v1.0.0

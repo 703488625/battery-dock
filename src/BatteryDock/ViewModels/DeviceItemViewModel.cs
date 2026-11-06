@@ -81,10 +81,6 @@ internal sealed class DeviceItemViewModel : INotifyPropertyChanged
 
     public bool HasBattery => Battery.HasValue;
 
-    public string BatteryGroup => IsWired || !Battery.HasValue
-        ? "其他"
-        : IsEstimated ? "档位电量" : "精确电量";
-
     public string TransportLabel => Transport switch
     {
         DeviceTransport.Wireless24G => "2.4G",

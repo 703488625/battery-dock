@@ -21,8 +21,10 @@
 | BLE Battery Service | BLE GATT | `0x180F` / `0x2A19` | ✅ 通用路径 |
 | Xbox 手柄（蓝牙） | BLE GATT | `0x180F` / `0x2A19` | 🧪 通用路径，未在 Xbox 实机确认 |
 | Xbox 手柄（无线适配器 / USB） | Windows XInput | `XInputGetBatteryInformation` | 🧪 代码已接入，未实机验证 |
-| DualSense（USB） | USB HID input report | byte 52：电量低 4 位、充电高 4 位 | 🧪 代码已接入，未实机验证 |
-| GameSir T4N2（Nova 2 Lite） | 厂商 HID report | 65B 报文，`[19]` 电量 / `[20]` 充电 | 🧪 代码已接入，未实机验证 |
+| DualShock 4（USB / 蓝牙） | HID input report | USB `0x01` byte30 / 蓝牙 `0x11` byte32 | 🧪 代码已接入，未实机验证 |
+| DualSense（USB / 蓝牙） | HID input report | USB `0x01` byte53 / 蓝牙 `0x31` byte54 | 🧪 代码已接入，未实机验证 |
+| GameSir Nova 2 / T4N2 | 厂商 HID report | `0xFF7A`，`00 01 01 00`，电量 payload[18] | 🧪 代码已接入，未实机验证 |
+| GameSir G7 Pro CE | 厂商 HID report | `0xFFF0`，`0F F2 00` 心跳 + `0x12` 状态流 | 🧪 代码已接入，未实机验证 |
 | BETOP 鲲鹏20 | 厂商 HID report | `02 15`，byte[2] 电量 / byte[4]&0x0F 充电 | 🧪 代码已接入，未实机验证 |
 | Windows 设备电量属性 | Windows PnP | 系统属性 | ✅ 通用路径 |
 | 经典蓝牙 HFP 电量 | 经典蓝牙 | `{104EA319-6EE2-4701-BD47-8DDBF425BBE5}` PID 2 | ⚠️ 依设备 |
@@ -43,6 +45,19 @@
 - Characteristic：`0x2A19`（Battery Level，0–100）
 - 适用于标准 BLE 键盘、鼠标、手柄、部分耳机。
 - Windows 通过 `BluetoothLEDevice` / GATT 枚举读取；不需要厂商软件。
+
+### 标准 HID Battery Strength（兜底）
+
+当厂商协议没有命中时，程序会尝试从 HID 报告描述符的标准电量 usage 读取：
+
+- `UsagePage 0x0006 / Usage 0x0020`：Battery Strength
+- `0x0085 / 0x0066`：Relative State of Charge
+- `0x0085 / 0x0065`：Battery Level
+- `0x0085 / 0x0001`：Absolute State of Charge
+
+实现：`Services/HidStandardBatteryReader.cs`，通过 `HidP_GetUsageValue`
+从报告描述符定位字段，不假设固定字节偏移；只接受 0–100 的值。
+这是最后兜底，优先使用设备自己的厂商协议。
 
 ### Windows 设备电量属性
 
@@ -108,39 +123,85 @@
 
 ---
 
-## Sony DualSense（USB）
+## Sony DualShock 4 / DualSense
 
-实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadDualSense`。
+实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadDualShock4` /
+`TryReadDualSense`。
 
-- USB HID 输入报告长度至少 53 字节，报告 ID `0x01`。
-- 第 `52` 字节（0-based）：
-  - 低 4 位：电量档位 `0–10`，乘 10 得到百分比。
-  - 高 4 位：充电状态；`1` 或 `2` 表示充电中。
-- 只处理 `VID 0x054C / PID 0x0CE6`（DualSense）和 `0x0DF2`（DualSense Edge），
-  且跳过 `BTHENUM` 接口；蓝牙 DualSense 报告布局不同，暂未接入。
-- 协议事实来自 Linux 内核 `hid-playstation.c` 和 ds-battery-indicator 的说明；
-  后者没有 LICENSE，因此没有复制其代码。
+### DualShock 4
 
-验证状态：🧪 本机没有 DualSense，未实机验证。
+- USB：report ID `0x01`，电量/状态字节 **30**。
+- 蓝牙：完整 report ID `0x11`，电量/状态字节 **32**；
+  蓝牙 `0x01` 是 10 字节精简报告，不含电量，不能当完整报告解析。
+- 字节低 4 位是电量档位 0–10；bit4 表示 USB 线已连接。
+- 有线时：档位 <10 表示充电中；10 表示接近满电；11 表示已充满；
+  14/15 是电压/温度/其他异常，不显示为 0%。
+- 无线时：0–10 才是有效档位；大于 10 的异常值直接忽略。
+
+### DualSense
+
+- USB：report ID `0x01`，电量/状态字节 **53**。
+- 蓝牙：report ID `0x31`，电量/状态字节 **54**。
+- 低 4 位是电量档位 0–10；高 4 位是充电状态：
+  - `0` 放电
+  - `1` 充电中
+  - `2` 已充满
+  - `0xA` / `0xB` / `0xF` 是过压/温度/其他异常，直接忽略
+- 只处理 `PID 0x0CE6`（DualSense）和 `0x0DF2`（DualSense Edge）。
+- 蓝牙 HID 可能只允许读、不允许写；`HidNativeDevice` 会回退到只读流。
+
+### 电量精度
+
+PS 手柄只上报 0–10 档，并不存在真正的 1% 精度。本程序按
+`level * 10 + 5` 取档位中值（10 档 = 100%），并设置 `IsEstimated`，
+界面显示 `≈75%` 而不是伪精确的 `70%`。
+
+协议事实来自 Linux 内核 `hid-playstation.c`，并参考了
+PS-Controller-Battery-Monitoring 的技术文档与 BattTray 的 Sony 分支；
+没有复制其代码。
+
+验证状态：🧪 本机没有 PS 手柄，未实机验证；已用合成帧验证
+DS4 USB/蓝牙、DualSense USB/蓝牙以及异常状态拒绝逻辑。
 
 ---
 
-## GameSir T4N2（Nova 2 Lite）
+## GameSir Nova 2 / T4N2
 
-实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadGameSir`。
+实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadGameSirT4N2`。
 
-- 设备 VID `0x3537`；T4N2 有线 / 2.4G 接收器接口。
-- 查询：写入厂商报告，前 4 字节 `00 01 01 00`，其余补零到输出报告长度。
-- 回应（65 字节布局）：
-  - `[0] = 0x00`，`[1] = 0x01`
-  - `[2..7]`：设备 MAC
-  - `[19]`：电量 0–100
-  - `[20]`：充电状态，非 0 表示充电中
-- 使用 MAC 作为稳定 Key：`gamesir:{MAC}`，换连接方式后仍能沿用上次电量。
-- 蓝牙模式 PID `0x02E0` 不开放电量查询；界面会显示
-  “盖世小鸡蓝牙模式不开放电量查询”。
+- 设备 VID `0x3537`；Nova 2 / T4N2 有线或 2.4G 接收器接口。
+- 厂商集合：`usage_page 0xFF7A`，输入/输出报告各约 65 字节。
+- 查询：写入 `00 01 01 00`，其余补零到输出报告长度。
+- 回应可能带或不带前导 report id：
+  - `response[0] == 0x00`：payload 从 `[1]` 开始，MAC 为 `[1..6]`，
+    电量在整帧 `[19]`，充电在 `[20]`。
+  - 否则：payload 从 `[0]` 开始，MAC 为 `[0..5]`，电量在 `[18]`，
+    充电在 `[19]`。
+- MAC 全零视为无效回应；使用 MAC 作为稳定 Key：`gamesir:{MAC}`。
+- 蓝牙模式 PID `0x02E0` 不开放电量查询；界面会显示原因。
 
-验证状态：🧪 按 peripheral-battery-widget 的 MIT 协议事实实现，本机无设备。
+验证状态：🧪 按 GamesirBatteryTray 的 MIT 协议事实实现，本机无设备；
+已用合成帧验证带/不带 report id 两种布局。
+
+---
+
+## GameSir G7 Pro CE
+
+实现：`Services/WirelessHidBatteryService.cs` 的 `TryReadGameSirG7Pro`。
+
+- 设备 VID `0x3537`，PID 可能变化（实测见过 `0x10B9` / `0x0575`）。
+- 厂商集合：`usage_page 0xFFF0`，report ID `0x0F`，输入/输出约 64 字节。
+- 先尝试被动读取 `0x12` 状态流；没有数据时才发心跳。
+- 心跳：`0F F2 00` 补零到输出报告长度；发一帧即可开启状态流约 2 秒。
+- 状态流：report ID `0x12`。
+  - `[35] == 1`：充电中。
+  - `[36]`：电量百分比 0–100，直接使用，不做 bit7 拆包。
+  - 电量 `0` 或 `>100` 视为未就绪/无效。
+- 每次扫描发一帧心跳，读 2.2 秒窗口后让状态流自然停止；不常驻连接。
+- 显示名固定为 `GameSir G7 Pro`；无法从 dongle 产品串可靠区分时也不影响识别。
+
+验证状态：🧪 按 vigil-watt issue #22 的协议事实实现，本机无设备；
+已用合成 `0x12` 帧验证电量和充电解析。
 
 ---
 
@@ -189,7 +250,7 @@
 
 ### Evision（ATK Z87 / V75X）
 
-- 64 字节 HID report。
+- 64 字节 HID report；优先选择 `usage_page 0xFF05` 的厂商接口。
 - 请求：`04 SeqLo SeqHi 1A`，其中 `Seq` 是非零 16 位序号。
 - 回包必须回显相同的 `Seq` 和命令 `0x1A`。
 - 电量：响应 byte 8；充电标志：byte 9。

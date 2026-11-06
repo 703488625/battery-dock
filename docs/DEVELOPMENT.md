@@ -46,6 +46,7 @@ BatteryDock.exe --show       启动后直接打开面板
 BatteryDock.exe --settings   启动后直接打开设置页
 BatteryDock.exe --demo       演示模式（假数据，不读写真实设备）
 BatteryDock.exe --verbose    输出详细日志
+BatteryDock.exe --dump-hid   导出 HID 诊断报告并打开
 BatteryDock.exe --tray       静默启动（开机启动项使用）
 ```
 

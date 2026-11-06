@@ -52,6 +52,23 @@ bundled.
   (`02 15`, battery at byte 2, charge at byte 4 low nibble) and the
   data-driven device-descriptor idea.
   <https://github.com/oitsukiii/betop-battery>
+- **WWWyyy452/GamesirBatteryTray** (MIT) — GameSir Nova 2 / T4N2
+  `usage_page 0xFF7A` device-info query, optional report-id handling, MAC and
+  battery offsets.
+  <https://github.com/WWWyyy452/GamesirBatteryTray>
+- **evren-oct/vigil-watt issue #22** — GameSir G7 Pro CE `usage_page 0xFFF0`,
+  `0F F2 00` heartbeat opening the `0x12` state stream, and [35]/[36] charge
+  and battery offsets. Only protocol facts were used; no source code from the
+  issue was copied.
+  <https://github.com/evren-oct/vigil-watt/issues/22>
+- **freeeggs/PS-Controller-Battery-Monitoring** (MIT) — DualShock 4 /
+  DualSense HID report offsets, 11-level battery interpretation and fault-state
+  handling derived from Linux `hid-playstation.c`.
+  <https://github.com/freeeggs/PS-Controller-Battery-Monitoring>
+- **wuxiena/batt-tray** (MIT as stated in its README) — passive-first GameSir
+  `0x12` read before the `0F F2` heartbeat, and the active/passive polling
+  split. Only protocol and design facts were used.
+  <https://github.com/wuxiena/batt-tray>
 - **XingYu-999/ControllerForwardingTool** (MIT) — BLE GATT discovery retry
   pattern (release/reopen after `Unreachable`) and Nintendo Switch 2 Pro
   battery report facts. Only the retry idea and protocol facts were used;
@@ -68,7 +85,10 @@ bundled.
   <https://github.com/HeyOkay/HaloBattery>
 - **mouse_tray** — Nordic 52/54 Compx/ATK mouse protocol details.
   <https://github.com/Fan4Metal/mouse_tray>
-- **2.4G-battery-viewer** — ATK/VXE wireless protocol notes.
+- **yszyszysz233/2.4G-battery-viewer** (no license file) — ATK/VXE Nordic
+  report `08 7D 72 02 00 01 07 01`, standard HID battery usage fallback,
+  HID probe/calibration workflow and Jieli TLV protocol notes. Only protocol
+  facts and design ideas were used; no source code was copied.
   <https://github.com/yszyszysz233/2.4G-battery-viewer>
 - **FerrisPulse issue #31** — ATK V75X Evision battery protocol: report `0x04`,
   non-zero 16-bit request sequence, command `0x1A`, percentage at byte 8 and

@@ -38,7 +38,7 @@ flowchart LR
 | `Services/PeripheralBatteryService.cs` | 汇总蓝牙、XInput、2.4G 和罗技结果，合并同一设备 |
 | `Services/BluetoothBatteryService.cs` | BLE GATT（含 3 次 Unreachable 重试）、Windows 属性和经典蓝牙 HFP |
 | `Services/XInputBatteryService.cs` | 通过 `xinput1_4.dll` 读取 Xbox 适配器 / USB 手柄的 4 档电量 |
-| `Services/WirelessHidBatteryService.cs` | 雷蛇、ATK/VXE、ROG Omni、MCHOSE、COMPX/HECHI/Nordic、DualSense USB、GameSir T4N2、BETOP |
+| `Services/WirelessHidBatteryService.cs` | 雷蛇、ATK/VXE、ROG Omni、MCHOSE、COMPX/HECHI/Nordic、DualShock 4、DualSense（USB/蓝牙）、GameSir Nova 2/T4N2、GameSir G7 Pro、BETOP |
 | `Services/LogitechHidppService.cs` | HID++ 2.0 电量、稳定 ID、接收器通知、DPI/回报率 |
 | `Services/MouseDpiService.cs` | 按设备品牌路由 DPI / 回报率操作 |
 | `Services/LastKnownStore.cs` | 上次电量持久化，设备休眠时回退 |
@@ -82,7 +82,7 @@ sequenceDiagram
 - **BLE 重试**：GATT 服务/特征发现或读取返回 `Unreachable` 时，释放当前 `BluetoothLEDevice` / `GattDeviceService`，等待 800ms 后重开，最多 3 次；`AccessDenied` 等确定性失败不重试。
 - **XInput 去重**：Xbox 适配器 / USB 手柄通过 XInput 读取；蓝牙 Xbox 手柄也占用一个 XInput 槽位，因此按 `max(0, 无线槽位数 - 已连接蓝牙 Xbox 数)` 保留适配器条目，蓝牙精确百分比优先。预览阶段同样会做一次去重，避免同一台手柄短暂出现两张卡片。
 - **上次电量**：读数失败时按稳定 Key 查 `last-known.json`；蓝牙键盘、鼠标、手柄默认保留上次电量。XInput 只存在于当前系统槽位，断开后不会生成离线卡片。
-- **分组显示**：`MainViewModel.DevicesView` 使用 `PropertyGroupDescription` 按 `BatteryGroup` 分成“精确电量 / 档位电量 / 其他”；四档估算设备显示 `≈`。
+- **列表排序**：已连接设备优先，其后按精确电量、档位电量、其他排序；不显示分组标题，四档估算设备显示 `≈`。
 - **重复提醒**：`App.ProcessLowBatteryAlerts` 在低电量未恢复时每 30 分钟再提醒一次；充电或电量回升超过阈值后重新武装。
 
 ## 线程模型
@@ -92,6 +92,7 @@ sequenceDiagram
 - 扫描的 preview 回调可能来自工作线程；`MainViewModel` 捕获 `SynchronizationContext` 后 Post 回 UI 线程，避免跨线程修改 `ObservableCollection`。
 - 罗技接收器监听器是独立后台任务，收到 `0x41` 通知后触发 debounce 刷新，再回到 UI 线程更新。
 - 所有对 HID 的同步/异步读写都有超时；`HidNativeDevice` 的写入超时为 1 秒。
+- 面板隐藏或后台刷新结束后，`MemoryTrimmer` 等待 2.5 秒，确认面板仍未打开后执行最多三轮 GC/终结器清扫（间隔 1.5 秒，首轮设置 `LargeObjectHeapCompactionMode.CompactOnce`），最后调用 `EmptyWorkingSet`；面板重新打开或工具窗口仍开着时通过 generation 计数和谓词取消后续清扫。
 
 ## 设备身份与合并
 
@@ -134,7 +135,7 @@ sequenceDiagram
 
 - 2.4G 私有协议因型号/固件而异，不能保证覆盖所有设备。
 - XInput 只提供 4 档电量，显示为估算值；无法取得手柄身份，多个手柄同时在线时槽位归属可能不准确。
-- DualSense 只解析 USB；GameSir 蓝牙模式 / 其他北通型号尚未验证；新协议首次接入时应先看 `--verbose` 日志中的原始帧。
+- PS 手柄只有 0–10 档，界面按档位中值显示 `≈`，不伪造 1% 精度；异常状态不会转成 0%。GameSir 蓝牙模式 / 其他北通型号尚未验证；GameSir G7 Pro 先被动读状态流，失败才发心跳，且不常驻连接。新协议首次接入时应先看 `--verbose` 日志中的原始帧。
 - 设备休眠时通常不会返回新电量；应用会回退到上次电量。
 - 部分雷蛇固件不开放 HID 回报率切换；UI 会明确提示。
 - 罗技 HID++ 1.0 老设备暂未覆盖；稳定 ID/接收器通知需要在对应硬件上复测。
